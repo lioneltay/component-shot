@@ -247,6 +247,10 @@ const createConfig = async ({
 					},
 				},
 				{
+					test: /\.css$/,
+					type: 'css/auto',
+				},
+				{
 					test: /\.(png|jpe?g|webp|svg)$/,
 					type: 'asset/resource',
 				},
