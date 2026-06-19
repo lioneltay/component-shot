@@ -1,0 +1,44 @@
+{
+  "name": "@lioneltay/component-shot",
+  "version": "0.1.0",
+  "description": "One-shot browser screenshots for component scenario modules.",
+  "type": "module",
+  "bin": {
+    "component-shot": "./dist/cli.js",
+    "component-shot-mcp": "./dist/mcp.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "prepare": "pnpm build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@rspack/core": "2.0.5",
+    "buffer": "6.0.3",
+    "playwright": "1.56.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.4",
+    "@types/react": "18.0.17",
+    "@types/react-dom": "18.0.6",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "typescript": "6.0.3"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "packageManager": "pnpm@10.26.1"
+}
