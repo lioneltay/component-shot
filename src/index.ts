@@ -4,6 +4,7 @@ import fs from 'node:fs/promises'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
+import { runComponentShotGalleryCli } from './gallery.js'
 import { createRspackBuild, type ComponentShotRspackOptions } from './rspack.js'
 export type {
 	ComponentShotAppProvider,
@@ -209,6 +210,7 @@ const parseViewport = (value: string): ComponentShotViewport => {
 
 const createUsage = (usageCommand: string) => `Usage:
   ${usageCommand}
+  component-shot gallery [options]
 
 Options:
   --scenario <path>         Scenario module to render. With --source, writes source to this path.
@@ -972,6 +974,14 @@ export const runComponentShotCli = async ({
 	usageCommand = 'component-shot --scenario <file.tsx> [--setup setup.tsx] [options]',
 	}: ComponentShotCliConfig = {}) => {
 		try {
+			if (argv[0] === 'gallery') {
+				await runComponentShotGalleryCli({
+					argv: argv.slice(1),
+					usageCommand: 'component-shot gallery [options]',
+				})
+				return
+			}
+
 			const options = parseCliArgs({ argv, defaults, usageCommand })
 			const cliBuild =
 				build ??

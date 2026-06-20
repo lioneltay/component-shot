@@ -267,7 +267,7 @@ const createConfig = async ({
 		output: {
 			filename: 'component-shot.js',
 			path: context.publicDir,
-			publicPath: '/',
+			publicPath: options.publicPath ?? '/',
 		},
 		plugins: [
 			new rspack.HtmlRspackPlugin({

@@ -7,6 +7,7 @@
     "build": "tsc -p tsconfig.json && vite build",
     "browsers": "playwright install chromium",
     "dev": "vite --host 127.0.0.1",
+    "gallery": "component-shot gallery",
     "preview": "vite preview --host 127.0.0.1",
     "shot": "component-shot --scenario component-shot/scenarios/product-card.tsx --save --json",
     "shot:chrome": "component-shot --scenario component-shot/scenarios/product-card.tsx --save --json --browser-channel chrome"

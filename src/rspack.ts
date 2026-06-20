@@ -6,6 +6,7 @@ export type ComponentShotRspackOptions = {
 	aliases?: Record<string, string>
 	dependencyRoots?: string[]
 	entry?: string
+	publicPath?: string
 	setup?: string
 	workspacePackageDirs?: string[]
 }

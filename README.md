@@ -62,6 +62,35 @@ component-shot/screenshots/basic/latest.png
 component-shot/screenshots/basic/history/<timestamp>.png
 ```
 
+## Gallery
+
+Open a local gallery for scenario modules:
+
+```bash
+component-shot gallery
+```
+
+The gallery scans `component-shot/scenarios`, bundles scenarios on demand, and
+renders each one in a live iframe preview.
+It watches the active `component-shot` directory and reloads the browser when
+scenarios, setup, or screenshot history changes. Opening a scenario shows the
+live render first, with historical screenshots below it when they exist.
+Use the Columns control to switch between smart layout and fixed two-, three-,
+or four-column grids. Pinning scenarios keeps them at the top of the gallery;
+both preferences are stored in the browser. Delete removes a scenario source
+file, and Clear removes all currently discovered scenario source files. Screenshot
+history is left intact.
+
+For apps that keep scenarios somewhere else:
+
+```bash
+component-shot gallery \
+  --scenario-dir packages/client/component-shot/scenarios
+```
+
+Use `--screenshots-dir` when screenshot history is not beside the scenario
+directory. Use `--no-open` to print the local URL without opening a browser.
+
 Use `--build-command` only as an escape hatch when the built-in Rspack build is not enough.
 
 ## MCP Server

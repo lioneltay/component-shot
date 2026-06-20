@@ -29,6 +29,12 @@ demo/component-shot/screenshots/product-card/latest.png
 demo/component-shot/screenshots/product-card/history/<timestamp>.png
 ```
 
+## Gallery
+
+```bash
+pnpm --dir demo gallery
+```
+
 ## Codex MCP
 
 The project-level Codex config at `.codex/config.toml` registers `component-shot-demo`.
