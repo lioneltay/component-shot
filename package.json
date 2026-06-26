@@ -8,8 +8,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "component-shot": "./dist/cli.js",
-    "component-shot-mcp": "./dist/mcp.js"
+    "component-shot": "dist/cli.js",
+    "component-shot-mcp": "dist/mcp.js"
   },
   "exports": {
     ".": {
