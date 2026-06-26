@@ -13,7 +13,7 @@
     "shot:chrome": "component-shot --scenario component-shot/scenarios/product-card.tsx --save --json --browser-channel chrome"
   },
   "dependencies": {
-    "@lioneltay/component-shot": "file:..",
+    "@lioneltay/component-shot": "link:..",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },

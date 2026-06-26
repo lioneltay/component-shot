@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { ComponentShotBuild } from './index.js'
+import type { ComponentShotBuild } from './build-types.js'
 
 export type ComponentShotRspackOptions = {
 	aliases?: Record<string, string>

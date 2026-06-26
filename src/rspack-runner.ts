@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { ComponentShotBuildContext } from './index.js'
+import type { ComponentShotBuildContext } from './build-types.js'
 import type { ComponentShotRspackOptions } from './rspack.js'
 
 type PackageJson = {

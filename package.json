@@ -1,8 +1,12 @@
 {
   "name": "@lioneltay/component-shot",
   "version": "0.1.0",
-  "description": "One-shot browser screenshots for component scenario modules.",
+  "description": "Capture, inspect, and iterate React component scenarios with Playwright.",
+  "license": "MIT",
+  "author": "Lionel Tay",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "bin": {
     "component-shot": "./dist/cli.js",
     "component-shot-mcp": "./dist/mcp.js"
@@ -15,12 +19,42 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lioneltay/component-shot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lioneltay/component-shot/issues"
+  },
+  "homepage": "https://github.com/lioneltay/component-shot#readme",
+  "keywords": [
+    "component",
+    "screenshot",
+    "playwright",
+    "visual-testing",
+    "react",
+    "mcp",
+    "codex"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
+    "browsers": "playwright install chromium",
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "prepare": "pnpm build"
+    "prepare": "pnpm build",
+    "prepublishOnly": "pnpm verify",
+    "release:dry-run": "pnpm verify && npm pack --dry-run",
+    "release:publish": "pnpm verify && npm publish --access public",
+    "verify": "pnpm check && pnpm build && pnpm --dir demo build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",

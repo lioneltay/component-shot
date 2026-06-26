@@ -1,16 +1,24 @@
 # Component Shot Demo
 
-Small React app used to test this repo's local `@lioneltay/component-shot` package.
+Small React app used to exercise this repository's local `@lioneltay/component-shot` package.
 
-## Run
+## Setup
+
+From the repository root:
 
 ```bash
+pnpm install
 pnpm --dir demo install
-pnpm --dir demo browsers
+pnpm browsers
+```
+
+## Run the App
+
+```bash
 pnpm --dir demo dev
 ```
 
-## Capture the scenario
+## Capture the Scenario
 
 ```bash
 pnpm --dir demo shot
@@ -29,15 +37,15 @@ demo/component-shot/screenshots/product-card/latest.png
 demo/component-shot/screenshots/product-card/history/<timestamp>.png
 ```
 
-## Gallery
+## Open the Gallery
 
 ```bash
 pnpm --dir demo gallery
 ```
 
-## Skill
+## Install the Codex Skill
 
-From the repo root:
+From the repository root:
 
 ```bash
 pnpm exec component-shot skill
