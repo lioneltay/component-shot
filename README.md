@@ -91,11 +91,28 @@ component-shot gallery \
 Use `--screenshots-dir` when screenshot history is not beside the scenario
 directory. Use `--no-open` to print the local URL without opening a browser.
 
+## Skill
+
+Install a repo-local skill for component-shot workflows:
+
+```bash
+component-shot skill
+```
+
+This writes:
+
+```text
+.codex/skills/component-shot/SKILL.md
+```
+
+Use `--output-dir` or `--path` to choose a different skill parent directory,
+and `--overwrite` to replace an existing generated skill.
+
 Use `--build-command` only as an escape hatch when the built-in Rspack build is not enough.
 
 ## MCP Server
 
-Agents can call the MCP server directly and receive the PNG as image content:
+MCP clients can call the server directly and receive the PNG as image content:
 
 ```json
 {

@@ -1,6 +1,6 @@
 import scenarioExport from '__component_shot_scenario__'
 import setupExport from '__component_shot_setup__'
-import React, { Fragment, type CSSProperties, type ReactNode } from 'react'
+import React, { type CSSProperties, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type {
 	ComponentShotAppSetup,
@@ -82,11 +82,11 @@ const mount = async () => {
 	const appSetup = setupExport ?? {}
 	const { node, objectScenario } = await renderScenario(scenarioExport)
 	const Wrapper = objectScenario?.wrapper
-	const Provider = appSetup.Provider ?? Fragment
+	const Provider = appSetup.Provider
 	const providerOptions = objectScenario?.providerOptions
 	const content = Wrapper ? <Wrapper>{node}</Wrapper> : node
 	const wrappedContent =
-		providerOptions === false ? content : <Provider options={providerOptions}>{content}</Provider>
+		providerOptions === false || !Provider ? content : <Provider options={providerOptions}>{content}</Provider>
 
 	createRoot(rootElement).render(
 		<div

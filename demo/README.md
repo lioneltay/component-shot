@@ -35,7 +35,15 @@ demo/component-shot/screenshots/product-card/history/<timestamp>.png
 pnpm --dir demo gallery
 ```
 
-## Codex MCP
+## Skill
 
-The project-level Codex config at `.codex/config.toml` registers `component-shot-demo`.
-After restarting Codex in this trusted repo, use `/mcp` to confirm the server is active.
+From the repo root:
+
+```bash
+pnpm exec component-shot skill
+```
+
+## MCP
+
+The project-level config at `.codex/config.toml` registers `component-shot-demo`.
+After restarting in this trusted repo, use `/mcp` to confirm the server is active.

@@ -6,6 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { runComponentShotGalleryCli } from './gallery.js'
 import { createRspackBuild, type ComponentShotRspackOptions } from './rspack.js'
+import { runComponentShotSkillCli } from './skill.js'
 export type {
 	ComponentShotAppProvider,
 	ComponentShotAppSetup,
@@ -15,6 +16,8 @@ export type {
 	ComponentShotWrapper,
 } from './runtime/types.js'
 export { createRspackBuild, type ComponentShotRspackOptions } from './rspack.js'
+export { installComponentShotSkill, runComponentShotSkillCli } from './skill.js'
+export type { ComponentShotSkillInstallOptions, ComponentShotSkillInstallResult } from './skill.js'
 
 export type ComponentShotViewport = {
 	height: number
@@ -211,6 +214,7 @@ const parseViewport = (value: string): ComponentShotViewport => {
 const createUsage = (usageCommand: string) => `Usage:
   ${usageCommand}
   component-shot gallery [options]
+  component-shot skill [options]
 
 Options:
   --scenario <path>         Scenario module to render. With --source, writes source to this path.
@@ -978,6 +982,14 @@ export const runComponentShotCli = async ({
 				await runComponentShotGalleryCli({
 					argv: argv.slice(1),
 					usageCommand: 'component-shot gallery [options]',
+				})
+				return
+			}
+
+			if (argv[0] === 'skill') {
+				await runComponentShotSkillCli({
+					argv: argv.slice(1),
+					usageCommand: 'component-shot skill [options]',
 				})
 				return
 			}

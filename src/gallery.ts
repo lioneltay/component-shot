@@ -415,7 +415,11 @@ export const createComponentShotGalleryIndex = async (
 	}
 }
 
-const createScenarioCard = (scenario: ComponentShotGalleryScenario) => `<article class="scenario-card" data-scenario-card data-scenario-id="${escapeAttribute(scenario.id)}">
+const pinIcon = `<svg aria-hidden="true" viewBox="0 0 20 20"><path d="M7 3h6l-1 5 3 3v2H5v-2l3-3-1-5Z"/><path d="M10 13v4"/></svg>`
+const trashIcon = `<svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4 6h12"/><path d="M8 6V4h4v2"/><path d="M6 6l1 10h6l1-10"/><path d="M9 9v4"/><path d="M11 9v4"/></svg>`
+const openIcon = `<svg aria-hidden="true" viewBox="0 0 20 20"><path d="M8 5H5v10h10v-3"/><path d="M11 5h4v4"/><path d="M10 10l5-5"/></svg>`
+
+const createScenarioCard = (scenario: ComponentShotGalleryScenario) => `<article class="scenario-card" data-scenario-card data-scenario-id="${escapeAttribute(scenario.id)}" data-scenario-search="${escapeAttribute(`${scenario.name} ${scenario.relativeScenarioPath}`.toLowerCase())}">
 	<div class="render-frame" data-render-frame>
 		<iframe
 			title="${escapeAttribute(scenario.name)}"
@@ -425,33 +429,35 @@ const createScenarioCard = (scenario: ComponentShotGalleryScenario) => `<article
 		<div class="render-loading">Rendering...</div>
 	</div>
 	<div class="scenario-card__body">
-		<div>
+		<div class="scenario-card__meta">
 			<h2>${escapeHtml(scenario.name)}</h2>
 			<p class="path">${escapeHtml(scenario.relativeScenarioPath)}</p>
 		</div>
-		<div class="scenario-card__actions">
-			<button class="pin-button" type="button" data-pin-button aria-pressed="false" title="Pin scenario">Pin</button>
+		<div class="scenario-card__actions" aria-label="Scenario actions">
+			<button class="scenario-action pin-button" type="button" data-pin-button aria-label="Pin scenario" aria-pressed="false" title="Pin scenario">${pinIcon}</button>
 			<button
-				class="delete-scenario"
+				class="scenario-action delete-scenario"
 				type="button"
 				data-delete-scenario
 				data-scenario-name="${escapeAttribute(scenario.name)}"
 				data-scenario-path="${escapeAttribute(scenario.relativeScenarioPath)}"
+				aria-label="Delete scenario"
 				title="Delete scenario"
-			>Delete</button>
-			<a class="open-render" href="${escapeAttribute(scenario.detailUrl)}">Open</a>
+			>${trashIcon}</button>
+			<a class="scenario-action open-render" href="${escapeAttribute(scenario.detailUrl)}" aria-label="Open scenario" title="Open scenario">${openIcon}</a>
 		</div>
 	</div>
 </article>`
 
 const createGalleryHtml = (index: ComponentShotGalleryIndex) => {
 	const clearDisabledAttribute = index.scenarios.length === 0 ? ' disabled' : ''
+	const scenarioDirLabel = toPosixPath(path.relative(index.cwd, index.scenarioDir) || index.scenarioDir)
 	const cards =
 		index.scenarios.length > 0
 			? index.scenarios.map(createScenarioCard).join('\n')
 			: `<section class="empty-state">
 					<h2>No scenarios found</h2>
-					<p>${escapeHtml(toPosixPath(path.relative(index.cwd, index.scenarioDir) || index.scenarioDir))}</p>
+					<p>${escapeHtml(scenarioDirLabel)}</p>
 				</section>`
 
 	return `<!doctype html>
@@ -470,8 +476,19 @@ const createGalleryHtml = (index: ComponentShotGalleryIndex) => {
 		</script>
 		<style>
 			:root {
-				color: #172033;
-				background: #eef2f6;
+				--bg: #e9eef3;
+				--panel: #ffffff;
+				--panel-muted: #f6f8fb;
+				--border: #cbd5e1;
+				--border-strong: #aeb9c8;
+				--text: #111827;
+				--muted: #526173;
+				--subtle: #718096;
+				--accent: #0f766e;
+				--danger: #a11d33;
+				--ink: #101b2d;
+				color: var(--text);
+				background: var(--bg);
 				font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 				font-synthesis: none;
 				text-rendering: optimizeLegibility;
@@ -481,6 +498,10 @@ const createGalleryHtml = (index: ComponentShotGalleryIndex) => {
 				box-sizing: border-box;
 			}
 
+			[hidden] {
+				display: none !important;
+			}
+
 			body {
 				min-width: 320px;
 				min-height: 100vh;
@@ -488,23 +509,52 @@ const createGalleryHtml = (index: ComponentShotGalleryIndex) => {
 			}
 
 			.app-shell {
-				width: calc(100% - 32px);
+				width: 100%;
 				margin: 0 auto;
-				padding: 16px 0;
+				padding: 0 14px 18px;
 			}
 
-			header {
+			.gallery-header {
+				position: sticky;
+				top: 0;
+				z-index: 10;
+				display: grid;
+				grid-template-columns: minmax(280px, 1fr) auto;
+				align-items: center;
+				gap: 14px;
+				margin: 0 -14px 12px;
+				padding: 9px 14px;
+				border-bottom: 1px solid var(--border);
+				background: rgb(233 238 243 / 94%);
+				backdrop-filter: blur(8px);
+			}
+
+			.title-lockup {
 				display: flex;
-				align-items: end;
-				justify-content: space-between;
-				gap: 24px;
-				margin-bottom: 14px;
+				min-width: 0;
+				align-items: center;
+				gap: 9px;
+			}
+
+			.brand-mark {
+				width: 30px;
+				height: 30px;
+				display: grid;
+				flex: 0 0 auto;
+				place-items: center;
+				border: 1px solid #233044;
+				border-radius: 6px;
+				background: var(--ink);
+				color: #ffffff;
+				font-size: 0.64rem;
+				font-weight: 900;
+				line-height: 1;
 			}
 
 			.eyebrow {
-				margin: 0 0 8px;
-				color: #0f766e;
-				font-size: 0.78rem;
+				margin: 0 0 2px;
+				color: var(--accent);
+				font-size: 0.62rem;
 				font-weight: 800;
 				letter-spacing: 0;
 				text-transform: uppercase;
@@ -518,55 +568,123 @@ const createGalleryHtml = (index: ComponentShotGalleryIndex) => {
 
 			h1 {
 				margin-bottom: 0;
-				color: #111827;
-				font-size: 2rem;
-				line-height: 1;
+				color: var(--text);
+				font-size: 1.02rem;
+				line-height: 1.1;
 				letter-spacing: 0;
+			}
+
+			.workspace-path {
+				margin: 3px 0 0;
+				color: var(--muted);
+				font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+				font-size: 0.72rem;
+				line-height: 1.25;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
 			}
 
 			.summary {
 				display: flex;
 				align-items: center;
-				gap: 12px;
-				color: #506070;
+				justify-content: flex-end;
+				gap: 6px;
+				color: var(--muted);
 				font-weight: 700;
+				flex-wrap: wrap;
+			}
+
+			.search-control {
+				position: relative;
+				display: inline-flex;
+				align-items: center;
+			}
+
+			.search-control span {
+				position: absolute;
+				left: 9px;
+				color: var(--subtle);
+				font-size: 0.72rem;
+				font-weight: 800;
+				pointer-events: none;
+			}
+
+			.search-control input {
+				width: clamp(190px, 18vw, 300px);
+				min-height: 32px;
+				padding: 0 10px 0 58px;
+				border: 1px solid var(--border);
+				border-radius: 6px;
+				background: var(--panel);
+				color: var(--text);
+				font: inherit;
+				font-size: 0.8rem;
+				font-weight: 650;
+			}
+
+			.search-control input:focus,
+			.layout-control select:focus,
+			.summary a:focus,
+			.summary button:focus,
+			.scenario-action:focus {
+				outline: 2px solid rgb(15 118 110 / 30%);
+				outline-offset: 1px;
 			}
 
 			.layout-control {
 				display: inline-flex;
 				align-items: center;
-				gap: 8px;
-				color: #506070;
-				font-size: 0.85rem;
+				overflow: hidden;
+				min-height: 32px;
+				border: 1px solid var(--border);
+				border-radius: 6px;
+				background: var(--panel);
+				color: var(--muted);
+				font-size: 0.74rem;
 				font-weight: 800;
 			}
 
+			.layout-control span {
+				padding: 0 8px;
+			}
+
 			.layout-control select {
-				min-height: 38px;
-				padding: 0 34px 0 10px;
-				border: 1px solid #ccd6e3;
-				border-radius: 7px;
-				background: #ffffff;
-				color: #172033;
+				min-height: 30px;
+				padding: 0 26px 0 8px;
+				border: 0;
+				border-left: 1px solid var(--border);
+				background: var(--panel-muted);
+				color: var(--text);
 				font: inherit;
 			}
 
 			.summary-count {
+				min-height: 32px;
+				display: inline-flex;
+				align-items: center;
+				padding: 0 9px;
+				border: 1px solid var(--border);
+				border-radius: 999px;
+				background: #dde6ef;
+				color: #35465a;
+				font-size: 0.76rem;
 				white-space: nowrap;
 			}
 
 			.summary a,
 			.summary button {
-				min-height: 38px;
+				min-height: 32px;
 				display: inline-flex;
 				align-items: center;
 				justify-content: center;
-				padding: 0 14px;
-				border: 1px solid #ccd6e3;
-				border-radius: 7px;
-				background: #ffffff;
-				color: #172033;
+				padding: 0 10px;
+				border: 1px solid var(--border);
+				border-radius: 6px;
+				background: var(--panel);
+				color: var(--text);
 				font: inherit;
+				font-size: 0.76rem;
 				font-weight: 800;
 				text-decoration: none;
 			}
@@ -581,31 +699,16 @@ const createGalleryHtml = (index: ComponentShotGalleryIndex) => {
 			}
 
 			.summary .danger-button {
-				border-color: #e9bec5;
-				color: #9f1239;
-			}
-
-			.workspace {
-				display: grid;
-				gap: 6px;
-				margin-bottom: 16px;
-				padding: 10px 12px;
-				border: 1px solid #d7dee8;
-				border-radius: 8px;
-				background: #ffffff;
-				color: #506070;
-				font-size: 0.9rem;
-			}
-
-			.workspace code {
-				color: #172033;
-				font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+				border-color: #e4b8c0;
+				color: var(--danger);
 			}
 
 			.scenario-grid {
+				--auto-card-min: clamp(460px, 30vw, 640px);
 				display: grid;
-				grid-template-columns: repeat(auto-fit, minmax(min(560px, 100%), 1fr));
-				gap: 12px;
+				grid-template-columns: repeat(auto-fill, minmax(min(var(--auto-card-min), 100%), 1fr));
+				align-items: start;
+				gap: 10px;
 			}
 
 			html[data-gallery-columns="2"] .scenario-grid {
@@ -623,47 +726,47 @@ const createGalleryHtml = (index: ComponentShotGalleryIndex) => {
 			.scenario-card {
 				display: grid;
 				overflow: hidden;
-				border: 1px solid #d7dee8;
-				border-radius: 8px;
-				background: #ffffff;
-				box-shadow: 0 10px 28px rgb(15 23 42 / 7%);
+				border: 1px solid var(--border);
+				border-radius: 6px;
+				background: var(--panel);
+				box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
 			}
 
 			.scenario-card[data-pinned="true"] {
-				border-color: #89b8ad;
-				box-shadow: 0 10px 28px rgb(15 23 42 / 9%);
+				border-color: #6eaa9d;
+				box-shadow: inset 0 2px 0 #6eaa9d, 0 1px 2px rgb(15 23 42 / 6%);
 			}
 
 			.render-frame {
-				--preview-min-height: 240px;
+				--preview-min-height: 220px;
 				--preview-max-height: 620px;
 				position: relative;
-				height: clamp(320px, 28vw, var(--preview-max-height));
+				height: clamp(280px, 25vw, var(--preview-max-height));
 				overflow: hidden;
-				border-bottom: 1px solid #d7dee8;
-				background: #ffffff;
+				border-bottom: 1px solid var(--border);
+				background: #fbfcfe;
 			}
 
 			html[data-gallery-columns="2"] .render-frame {
 				--preview-max-height: 720px;
-				height: clamp(360px, 34vw, var(--preview-max-height));
+				height: clamp(340px, 34vw, var(--preview-max-height));
 			}
 
 			html[data-gallery-columns="3"] .render-frame {
 				--preview-max-height: 620px;
-				height: clamp(320px, 28vw, var(--preview-max-height));
+				height: clamp(300px, 26vw, var(--preview-max-height));
 			}
 
 			html[data-gallery-columns="4"] .render-frame {
 				--preview-max-height: 460px;
-				height: clamp(280px, 22vw, var(--preview-max-height));
+				height: clamp(240px, 21vw, var(--preview-max-height));
 			}
 
 			.render-frame iframe {
 				width: 100%;
 				height: 100%;
 				border: 0;
-				background: #ffffff;
+				background: var(--panel);
 				opacity: 0;
 				transition: opacity 160ms ease;
 			}
@@ -677,8 +780,9 @@ const createGalleryHtml = (index: ComponentShotGalleryIndex) => {
 				inset: 0;
 				display: grid;
 				place-items: center;
-				background: #ffffff;
-				color: #64748b;
+				background: var(--panel);
+				color: var(--subtle);
+				font-size: 0.8rem;
 				font-weight: 800;
 			}
 
@@ -687,14 +791,15 @@ const createGalleryHtml = (index: ComponentShotGalleryIndex) => {
 			}
 
 			.scenario-card__body {
-				display: flex;
+				display: grid;
 				align-items: center;
-				justify-content: space-between;
-				gap: 16px;
-				padding: 16px;
+				grid-template-columns: minmax(0, 1fr) auto;
+				gap: 10px;
+				min-height: 58px;
+				padding: 9px 10px 9px 12px;
 			}
 
-			.scenario-card__body > div:first-child {
+			.scenario-card__meta {
 				min-width: 0;
 			}
 
@@ -702,40 +807,55 @@ const createGalleryHtml = (index: ComponentShotGalleryIndex) => {
 				display: inline-flex;
 				flex: 0 0 auto;
 				align-items: center;
-				gap: 8px;
+				gap: 4px;
 			}
 
 			.scenario-card h2 {
-				margin-bottom: 8px;
-				color: #111827;
-				font-size: 1.15rem;
-				line-height: 1.2;
+				margin-bottom: 3px;
+				color: var(--text);
+				font-size: 0.92rem;
+				line-height: 1.15;
 				letter-spacing: 0;
 			}
 
 			.path {
 				margin-bottom: 0;
-				color: #506070;
+				color: var(--muted);
 				font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-				font-size: 0.8rem;
-				line-height: 1.45;
+				font-size: 0.7rem;
+				line-height: 1.35;
 				overflow-wrap: anywhere;
 			}
 
-			.pin-button {
+			.scenario-action {
 				flex: 0 0 auto;
-				min-height: 36px;
+				width: 30px;
+				height: 30px;
 				display: inline-flex;
 				align-items: center;
 				justify-content: center;
-				min-width: 72px;
-				padding: 0 12px;
-				border: 1px solid #ccd6e3;
-				border-radius: 7px;
-				background: #ffffff;
-				color: #172033;
+				padding: 0;
+				border: 1px solid var(--border);
+				border-radius: 5px;
+				background: var(--panel);
+				color: #314156;
 				font: inherit;
 				font-weight: 800;
+				line-height: 1;
+				text-decoration: none;
+			}
+
+			.scenario-action svg {
+				width: 15px;
+				height: 15px;
+				fill: none;
+				stroke: currentColor;
+				stroke-linecap: round;
+				stroke-linejoin: round;
+				stroke-width: 1.8;
+			}
+
+			.pin-button {
 				cursor: pointer;
 			}
 
@@ -746,71 +866,68 @@ const createGalleryHtml = (index: ComponentShotGalleryIndex) => {
 			}
 
 			.delete-scenario {
-				flex: 0 0 auto;
-				min-height: 36px;
-				display: inline-flex;
-				align-items: center;
-				justify-content: center;
-				min-width: 72px;
-				padding: 0 12px;
-				border: 1px solid #e9bec5;
-				border-radius: 7px;
-				background: #ffffff;
-				color: #9f1239;
-				font: inherit;
-				font-weight: 800;
+				border-color: #e4b8c0;
+				background: #fff8fa;
+				color: var(--danger);
 				cursor: pointer;
 			}
 
 			.open-render {
-				flex: 0 0 auto;
-				min-height: 36px;
-				display: inline-flex;
-				align-items: center;
-				justify-content: center;
-				padding: 0 12px;
-				border-radius: 7px;
-				background: #102033;
+				border-color: var(--ink);
+				background: var(--ink);
 				color: #ffffff;
-				font-weight: 800;
-				text-decoration: none;
 			}
 
 			.empty-state {
-				padding: 28px;
-				border: 1px solid #d7dee8;
-				border-radius: 8px;
-				background: #ffffff;
+				padding: 24px;
+				border: 1px solid var(--border);
+				border-radius: 6px;
+				background: var(--panel);
 			}
 
 			.empty-state h2 {
 				margin-bottom: 8px;
-				color: #111827;
+				color: var(--text);
 			}
 
 			.empty-state p {
 				margin-bottom: 0;
-				color: #506070;
+				color: var(--muted);
+			}
+
+			.filter-empty {
+				padding: 18px;
+				border: 1px dashed var(--border-strong);
+				border-radius: 6px;
+				background: rgb(255 255 255 / 55%);
+				color: var(--muted);
+				font-size: 0.86rem;
+				font-weight: 750;
 			}
 
 			@media (max-width: 720px) {
 				.app-shell {
-					width: calc(100% - 24px);
-					padding: 12px 0;
+					padding: 0 10px 14px;
 				}
 
-				header {
+				.gallery-header {
+					grid-template-columns: 1fr;
 					align-items: stretch;
-					flex-direction: column;
+					margin: 0 -10px 10px;
+					padding: 9px 10px;
 				}
 
 				h1 {
-					font-size: 2rem;
+					font-size: 1rem;
 				}
 
 				.summary {
-					justify-content: space-between;
-					flex-wrap: wrap;
+					justify-content: flex-start;
+				}
+
+				.search-control,
+				.search-control input {
+					width: 100%;
 				}
 
 				.scenario-grid,
@@ -824,51 +941,61 @@ const createGalleryHtml = (index: ComponentShotGalleryIndex) => {
 				html[data-gallery-columns="2"] .render-frame,
 				html[data-gallery-columns="3"] .render-frame,
 				html[data-gallery-columns="4"] .render-frame {
-					--preview-min-height: 220px;
+					--preview-min-height: 200px;
 					--preview-max-height: 480px;
-					height: 320px;
+					height: 280px;
 				}
 
 				.scenario-card__body {
-					align-items: flex-start;
-					flex-direction: column;
+					grid-template-columns: 1fr;
 				}
 
 				.scenario-card__actions {
 					width: 100%;
 					justify-content: flex-end;
 				}
+
+				.scenario-action {
+					width: 34px;
+					height: 34px;
+				}
 			}
 		</style>
 	</head>
 	<body>
 		<main class="app-shell">
-			<header>
-				<div>
-					<p class="eyebrow">Component Shot</p>
-					<h1>Scenario Gallery</h1>
+			<header class="gallery-header">
+				<div class="title-lockup">
+					<div class="brand-mark" aria-hidden="true">CS</div>
+					<div>
+						<p class="eyebrow">Component Shot</p>
+						<h1>Scenario Gallery</h1>
+						<p class="workspace-path">${escapeHtml(scenarioDirLabel)}</p>
+					</div>
 				</div>
-				<div class="summary">
+				<div class="summary" aria-label="Gallery controls">
+					<label class="search-control">
+						<span>Search</span>
+						<input data-gallery-search type="search" autocomplete="off" spellcheck="false" />
+					</label>
 					<label class="layout-control">
 						<span>Columns</span>
 						<select data-layout-select aria-label="Gallery columns">
-							<option value="auto">Smart</option>
+							<option value="auto">Auto</option>
 							<option value="2">2</option>
 							<option value="3">3</option>
 							<option value="4">4</option>
 						</select>
 					</label>
-					<span class="summary-count">${index.scenarios.length} ${index.scenarios.length === 1 ? 'scenario' : 'scenarios'}</span>
-					<button class="danger-button" type="button" data-clear-scenarios${clearDisabledAttribute}>Clear</button>
+					<span class="summary-count" data-scenario-count>${index.scenarios.length} ${index.scenarios.length === 1 ? 'scenario' : 'scenarios'}</span>
+					<button class="danger-button" type="button" data-clear-scenarios${clearDisabledAttribute}>Clear all</button>
 					<a href="/api/scenarios">JSON</a>
 				</div>
 			</header>
-			<section class="workspace" aria-label="Gallery paths">
-				<div>Scenarios: <code>${escapeHtml(toPosixPath(path.relative(index.cwd, index.scenarioDir) || index.scenarioDir))}</code></div>
-			</section>
 			<section class="scenario-grid" data-scenario-grid aria-label="Scenarios">
 				${cards}
 			</section>
+			<section class="filter-empty" data-filter-empty hidden>No scenarios match the current search.</section>
 		</main>
 		<script>
 			const columnsKey = 'component-shot-gallery:columns'
@@ -913,6 +1040,35 @@ const createGalleryHtml = (index: ComponentShotGalleryIndex) => {
 
 			const scenarioGrid = document.querySelector('[data-scenario-grid]')
 			const cards = Array.from(document.querySelectorAll('[data-scenario-card]'))
+			const countNode = document.querySelector('[data-scenario-count]')
+			const filterEmpty = document.querySelector('[data-filter-empty]')
+			const searchInput = document.querySelector('[data-gallery-search]')
+			const formatScenarioCount = (count, total) => {
+				const label = count === 1 ? 'scenario' : 'scenarios'
+				return count === total ? count + ' ' + label : count + ' of ' + total + ' scenarios'
+			}
+			const updateScenarioCount = () => {
+				if (!countNode) {
+					return
+				}
+				const visibleCount = cards.filter((card) => !card.hidden).length
+				countNode.textContent = formatScenarioCount(visibleCount, cards.length)
+			}
+			const applySearch = () => {
+				const query = String(searchInput?.value || '').trim().toLowerCase()
+				let visibleCount = 0
+				for (const card of cards) {
+					const matches = !query || String(card.dataset.scenarioSearch || '').includes(query)
+					card.hidden = !matches
+					if (matches) {
+						visibleCount += 1
+					}
+				}
+				if (filterEmpty) {
+					filterEmpty.hidden = visibleCount > 0 || cards.length === 0
+				}
+				updateScenarioCount()
+			}
 			const applyPinned = () => {
 				const pinned = readPinned()
 				const cardStates = cards.map((card, index) => {
@@ -923,7 +1079,7 @@ const createGalleryHtml = (index: ComponentShotGalleryIndex) => {
 					const button = card.querySelector('[data-pin-button]')
 					if (button) {
 						button.setAttribute('aria-pressed', String(isPinned))
-						button.textContent = isPinned ? 'Pinned' : 'Pin'
+						button.setAttribute('aria-label', isPinned ? 'Unpin scenario' : 'Pin scenario')
 						button.title = isPinned ? 'Unpin scenario' : 'Pin scenario'
 					}
 
@@ -940,6 +1096,7 @@ const createGalleryHtml = (index: ComponentShotGalleryIndex) => {
 						})
 						.forEach(({ card }) => scenarioGrid.appendChild(card))
 				}
+				applySearch()
 			}
 
 			const layoutSelect = document.querySelector('[data-layout-select]')
@@ -967,10 +1124,18 @@ const createGalleryHtml = (index: ComponentShotGalleryIndex) => {
 					}
 					writePinned(pinned)
 					applyPinned()
-					window.requestAnimationFrame(fitReadyFrames)
+					window.requestAnimationFrame(() => {
+						fitReadyFrames()
+						window.setTimeout(fitReadyFrames, 80)
+						window.setTimeout(fitReadyFrames, 280)
+					})
 				})
 			}
 			applyPinned()
+			searchInput?.addEventListener('input', () => {
+				applySearch()
+				window.requestAnimationFrame(fitReadyFrames)
+			})
 
 			const requestDelete = async (url) => {
 				const response = await fetch(url, { method: 'DELETE' })
