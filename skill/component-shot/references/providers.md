@@ -1,6 +1,6 @@
 # React Providers
 
-Use one setup module to reproduce the minimum app environment needed by scenarios.
+Use one setup module to reproduce the minimum app environment needed by scenarios. It is optional for self-contained UI; without it, Component Shot uses a no-op provider.
 
 ## Initialize
 

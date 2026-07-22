@@ -10,12 +10,12 @@ Use Component Shot as the visual loop for React work: mount a real component or 
 ## Core workflow
 
 1. Inspect the workspace with normal filesystem tools.
-   - Find `component-shot/setup.tsx`, the configured scenario root, and related scenarios.
+   - Identify the React project root, any `component-shot/setup.*`, and related scenarios.
    - Run `component-shot doctor` or `component-shot list --json` only when setup or discovery is unclear.
 2. Choose the smallest useful capture target.
    - Prefer a real application component with mocked props/providers when implementing production UI.
    - Pass an existing scenario path after editing a real component or reusable state.
-   - Pass complete TSX source for a disposable idea that does not need a workspace file.
+   - Pass complete TSX source plus its React `project` directory for a disposable idea that does not need a workspace file.
    - Add `persistAs` to source only when the state should remain visible in the gallery.
    - Update an existing scenario when it already represents the requested state.
 3. Render immediately after each meaningful UI change.
@@ -37,7 +37,9 @@ Use Component Shot as the visual loop for React work: mount a real component or 
 - Use fixed props, dates, IDs, locale, and mocked data. External network is blocked by default.
 - Represent important states as separate, descriptively named scenarios such as `invoice/loading.tsx`, `invoice/empty.tsx`, and `invoice/payment-failed.tsx`.
 - Use the project's `component-shot/setup.tsx` for themes, routers, query clients, stores, feature flags, and other app providers.
-- `persistAs` creates a scenario but never overwrites one. Edit existing scenarios with normal filesystem tools.
+- Temporary source requires `project` because it has no filesystem anchor for imports, dependencies, TypeScript configuration, or providers.
+- Existing scenario and repository-relative `persistAs` paths derive their project automatically. An optional `project` must agree with the path.
+- `persistAs` must point inside `<project>/component-shot/scenarios`. It creates a scenario and never overwrites one. Edit existing scenarios with normal filesystem tools.
 - Gallery history requires an existing scenario or source with `persistAs`; an explicit file export can come from temporary source.
 - Do not save history on every iteration.
 
@@ -46,8 +48,8 @@ Use Component Shot as the visual loop for React work: mount a real component or 
 | Need | `capture_component_shot` input |
 | --- | --- |
 | Inspect an existing state | `target: { type: "scenario", path }` |
-| Prototype without keeping source | `target: { type: "source", code }` |
-| Create a gallery scenario and inspect it | Source target with `persistAs` |
+| Prototype without keeping source | `target: { type: "source", project, code }` |
+| Create a gallery scenario and inspect it | Source target with a repository-relative `persistAs` |
 | Capture the visible viewport | Omit `area` or use `{ type: "viewport" }` |
 | Capture a complete scrollable composition | `area: { type: "page" }` |
 | Capture one component inside a larger UI | `area: { type: "element", selector }` |

@@ -1,34 +1,22 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { watch, type FSWatcher } from 'node:fs'
 import fs from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import path from 'node:path'
 import { z } from 'zod'
-import type { ComponentShotBuild, ComponentShotRenderProtocol } from './build-types.js'
-import type { ComponentShotRspackOptions } from './rspack.js'
-import { isPathWithin } from './scenarios.js'
+import {
+	createComponentShotMcpProjectRegistry,
+	type ComponentShotMcpProjectOptions,
+	type ComponentShotMcpProjectRuntime,
+} from './mcp-projects.js'
 import {
 	ComponentShotError,
 	componentShotViewportLimits,
 	type ComponentShotCaptureResult,
-	type ComponentShotSessionOptions,
 } from './session.js'
-import { createComponentShotWorkspace } from './workspace.js'
 
 const require = createRequire(import.meta.url)
 const packageJson = require('../package.json') as { version?: string }
 
-export type ComponentShotMcpServerOptions = {
-	browserChannel?: string
-	build?: ComponentShotBuild
-	defaults?: ComponentShotSessionOptions['defaults']
-	projectRoot?: string
-	protocol?: Partial<ComponentShotRenderProtocol>
-	rspack?: ComponentShotRspackOptions | false
-	scenarioDir?: string
-	screenshotsDir?: string
-	setup?: string
-}
+export type ComponentShotMcpServerOptions = ComponentShotMcpProjectOptions
 
 const viewportSchema = z
 	.object({
@@ -71,13 +59,27 @@ const environmentSchema = z
 	.strict()
 	.describe('Deterministic browser-environment overrides for this capture.')
 
-const targetSchema = z.discriminatedUnion('type', [
+const projectSchema = z
+	.string()
+	.min(1)
+	.describe(
+		'React project directory relative to the MCP process working directory, or an absolute path. Component Shot uses this directory for dependencies, tsconfig.json, setup discovery, scenarios, and screenshots. Temporary source is staged in <project>/component-shot/scenarios for relative imports.',
+	)
+
+const targetSchema = z.union([
 	z
 		.object({
 			path: z
 				.string()
 				.min(1)
-				.describe('Scenario file path relative to the configured project root.'),
+				.describe(
+					'Existing scenario file path relative to the MCP process working directory, or an absolute path.',
+				),
+			project: projectSchema
+				.optional()
+				.describe(
+					'Optional project consistency check. The scenario path normally derives its project automatically.',
+				),
 			type: z.literal('scenario'),
 		})
 		.strict()
@@ -88,17 +90,34 @@ const targetSchema = z.discriminatedUnion('type', [
 				.string()
 				.min(1)
 				.describe('Complete TSX scenario module source, including its default export.'),
+			project: projectSchema,
+			type: z.literal('source'),
+		})
+		.strict()
+		.describe(
+			'Render temporary source without retaining it. A project is required because the source has no filesystem anchor.',
+		),
+	z
+		.object({
+			code: z
+				.string()
+				.min(1)
+				.describe('Complete TSX scenario module source, including its default export.'),
 			persistAs: z
 				.string()
 				.min(1)
+				.describe(
+					'Repository-relative or absolute destination inside <project>/component-shot/scenarios. The path derives the project when project is omitted. Existing files are never overwritten.',
+				),
+			project: projectSchema
 				.optional()
 				.describe(
-					'Optional scenario path under the configured scenario root. Omit it for a temporary source preview. Existing files are never overwritten.',
+					'Optional project consistency check. The persistAs path normally derives its project automatically.',
 				),
 			type: z.literal('source'),
 		})
 		.strict()
-		.describe('Render complete TSX source immediately, optionally retaining it as a scenario.'),
+		.describe('Create a reusable scenario from complete TSX source and render it immediately.'),
 ])
 
 const areaSchema = z
@@ -135,7 +154,7 @@ const saveScreenshotSchema = z
 					.string()
 					.min(1)
 					.refine((value) => value.toLowerCase().endsWith('.png'), 'path must end in .png')
-					.describe('Stable PNG path inside the configured project root.'),
+					.describe('Stable PNG path relative to the resolved project root.'),
 				type: z.literal('file'),
 			})
 			.strict()
@@ -174,7 +193,7 @@ const captureInputSchema = z
 		if (
 			input.saveScreenshot?.type === 'history' &&
 			input.target.type === 'source' &&
-			!input.target.persistAs
+			!('persistAs' in input.target)
 		) {
 			context.addIssue({
 				code: 'custom',
@@ -199,30 +218,43 @@ const captureOutputSchema = z.object({
 	metadata: z.record(z.string(), z.unknown()),
 	outputPath: z.string(),
 	persistentScenario: z.boolean(),
+	projectRoot: z.string(),
 	scenarioId: z.string(),
 	scenarioPath: z.string().optional(),
+	setup: z.discriminatedUnion('mode', [
+		z.object({ mode: z.literal('configured'), path: z.string() }),
+		z.object({ mode: z.literal('custom-build') }),
+		z.object({ mode: z.literal('default') }),
+		z.object({ mode: z.literal('project'), path: z.string() }),
+	]),
 	viewport: z.object({ height: z.number(), width: z.number() }),
 })
 
-const serverInstructions = `Component Shot gives agents immediate visual access to React UI without navigating the real application. Use the workspace filesystem to read or edit components and reusable scenarios, then use capture_component_shot to build, render, screenshot, and inspect the pixels in one call.
+const serverInstructions = `Component Shot gives agents immediate visual access to React UI without navigating the real application. Use the filesystem to read or edit components and reusable scenarios, then use capture_component_shot to build, render, screenshot, and inspect the pixels in one call.
 
-The tool accepts either an existing scenario path or complete TSX scenario source. Source is temporary unless persistAs is provided. Every successful call returns the PNG; saveScreenshot only controls additional gallery history or stable file output. Prefer real application components mounted with the project's Component Shot provider and deterministic mocks. Use element capture for a focused region of a larger composition.`
+The tool accepts either an existing scenario path or complete TSX scenario source. Existing scenario and persistAs paths derive their React project automatically. Temporary source requires target.project because it has no filesystem location. Component Shot loads <project>/component-shot/setup.* when present and otherwise uses a no-op provider. Every successful call returns the PNG; saveScreenshot only controls additional gallery history or stable file output. Prefer real application components mounted with deterministic props and mocks. Use element capture for a focused region of a larger composition.`
 
-const toStructuredResult = (
+const toStructuredResult = async (
 	result: ComponentShotCaptureResult,
 	persistentScenario: boolean,
-) => ({
-	diagnostics: result.diagnostics,
-	durationMs: result.durationMs,
-	historyPath: result.historyPath,
-	latestPath: result.latestPath,
-	metadata: result.metadata as Record<string, unknown>,
-	outputPath: result.outputPath,
-	persistentScenario,
-	scenarioId: result.scenarioId,
-	...(persistentScenario ? { scenarioPath: result.scenarioPath } : {}),
-	viewport: result.viewport,
-})
+	project: ComponentShotMcpProjectRuntime,
+) => {
+	const setup = await project.getSetup()
+	return {
+		diagnostics: result.diagnostics,
+		durationMs: result.durationMs,
+		historyPath: result.historyPath,
+		latestPath: result.latestPath,
+		metadata: result.metadata as Record<string, unknown>,
+		outputPath: result.outputPath,
+		persistentScenario,
+		projectRoot: project.projectRoot,
+		scenarioId: result.scenarioId,
+		...(persistentScenario ? { scenarioPath: result.scenarioPath } : {}),
+		setup,
+		viewport: result.viewport,
+	}
+}
 
 const readImage = async (outputPath: string) => ({
 	data: await fs.readFile(outputPath, 'base64'),
@@ -230,8 +262,12 @@ const readImage = async (outputPath: string) => ({
 	type: 'image' as const,
 })
 
-const captureResult = async (result: ComponentShotCaptureResult, persistentScenario: boolean) => {
-	const structuredContent = toStructuredResult(result, persistentScenario)
+const captureResult = async (
+	result: ComponentShotCaptureResult,
+	persistentScenario: boolean,
+	project: ComponentShotMcpProjectRuntime,
+) => {
+	const structuredContent = await toStructuredResult(result, persistentScenario, project)
 	return {
 		content: [
 			{
@@ -244,13 +280,18 @@ const captureResult = async (result: ComponentShotCaptureResult, persistentScena
 	}
 }
 
-const errorResult = (error: unknown) => {
+const errorResult = async (error: unknown, project?: ComponentShotMcpProjectRuntime) => {
 	const message = error instanceof Error ? error.message : String(error)
 	const stage = error instanceof ComponentShotError ? error.stage : 'unknown'
+	const setup = project ? await project.getSetup().catch(() => undefined) : undefined
+	const hint =
+		project && setup?.mode === 'default'
+			? `No Component Shot setup was found for ${project.projectRoot}. The default no-op provider was used. If this component requires application context, create component-shot/setup.tsx or run component-shot init in that project.`
+			: undefined
 	return {
 		content: [
 			{
-				text: JSON.stringify({ error: { message, stage }, ok: false }, null, 2),
+				text: JSON.stringify({ error: { hint, message, stage }, ok: false }, null, 2),
 				type: 'text' as const,
 			},
 		],
@@ -259,62 +300,7 @@ const errorResult = (error: unknown) => {
 }
 
 export const createComponentShotMcpServer = async (options: ComponentShotMcpServerOptions = {}) => {
-	const projectRoot = path.resolve(options.projectRoot ?? process.cwd())
-	const workspace = await createComponentShotWorkspace({
-		allowExternalOutput: false,
-		browserChannel: options.browserChannel,
-		build: options.build,
-		cwd: projectRoot,
-		defaults: options.defaults,
-		protocol: options.protocol,
-		rspack: options.rspack,
-		scenarioDir: options.scenarioDir,
-		screenshotsDir: options.screenshotsDir,
-		setup: options.setup,
-	})
-	const session = await workspace.createSession()
-	let watcher: FSWatcher | undefined
-	const changedPaths = new Set<string>()
-	const onSourceChange = (_event: string, filename: string | Buffer | null) => {
-		if (!filename) return
-		const changedPath = path.resolve(projectRoot, filename.toString())
-		const relativePath = path.relative(projectRoot, changedPath)
-		if (
-			isPathWithin({ candidate: changedPath, root: workspace.screenshotsDir }) ||
-			relativePath
-				.split(path.sep)
-				.some((segment) => ['.git', 'dist', 'node_modules'].includes(segment))
-		) {
-			return
-		}
-		changedPaths.add(changedPath)
-	}
-	try {
-		watcher = watch(projectRoot, { recursive: true }, onSourceChange)
-	} catch {
-		watcher = watch(projectRoot, onSourceChange)
-	}
-	const flushSourceChanges = async () => {
-		await new Promise((resolve) => setTimeout(resolve, 30))
-		if (changedPaths.size === 0) return
-		const paths = [...changedPaths]
-		changedPaths.clear()
-		await session.invalidate(paths)
-	}
-	const handleCapture = async ({
-		operation,
-		persistentScenario,
-	}: {
-		operation: () => Promise<ComponentShotCaptureResult>
-		persistentScenario: boolean
-	}) => {
-		try {
-			await flushSourceChanges()
-			return await captureResult(await operation(), persistentScenario)
-		} catch (error) {
-			return errorResult(error)
-		}
-	}
+	const projects = await createComponentShotMcpProjectRegistry(options)
 	const server = new McpServer(
 		{ name: 'component-shot', version: packageJson.version ?? '0.0.0' },
 		{ instructions: serverInstructions },
@@ -330,12 +316,13 @@ export const createComponentShotMcpServer = async (options: ComponentShotMcpServ
 				readOnlyHint: false,
 			},
 			description:
-				"Render React UI from either an existing Component Shot scenario or complete TSX scenario source and return the PNG in the same call. Use immediately after creating or changing UI, for hard-to-reach states, responsive review, focused element captures, or PR and documentation images. Source is temporary unless target.persistAs is provided. The screenshot is ephemeral unless saveScreenshot requests gallery history or a project PNG. Prefer real application components mounted with deterministic props, mocks, and the project's Component Shot provider.",
+				"Render React UI from either an existing Component Shot scenario or complete TSX scenario source and return the PNG in the same call. Use immediately after creating or changing UI, for hard-to-reach states, responsive review, focused element captures, or PR and documentation images. Existing scenario and persistAs paths derive their React project automatically; temporary source requires target.project. The screenshot is ephemeral unless saveScreenshot requests gallery history or a project PNG. Component Shot uses the project's setup module when present and a no-op provider otherwise.",
 			inputSchema: captureInputSchema,
 			outputSchema: captureOutputSchema,
 		},
 		async (args) => {
 			const target = args.target
+			let project: ComponentShotMcpProjectRuntime | undefined
 			const request = {
 				animations: args.animations,
 				area: args.area ?? ({ type: 'viewport' } as const),
@@ -346,36 +333,48 @@ export const createComponentShotMcpServer = async (options: ComponentShotMcpServ
 				viewport: args.viewport,
 				waitFor: args.waitFor,
 			}
-			if (target.type === 'scenario') {
-				return handleCapture({
-					operation: () => session.capture({ ...request, scenario: target.path }),
-					persistentScenario: true,
-				})
-			}
-			if (target.persistAs) {
-				return handleCapture({
-					operation: () =>
-						session.captureSource({
+			try {
+				if (target.type === 'scenario') {
+					const resolved = await projects.resolveScenario(target)
+					project = resolved.project
+					await project.flushSourceChanges()
+					return captureResult(
+						await project.session.capture({ ...request, scenario: resolved.scenario }),
+						true,
+						project,
+					)
+				}
+				if ('persistAs' in target) {
+					const resolved = await projects.resolvePersistedSource(target)
+					project = resolved.project
+					await project.flushSourceChanges()
+					return captureResult(
+						await project.session.captureSource({
 							...request,
-							scenario: target.persistAs,
+							scenario: resolved.scenario,
 							source: target.code,
 						}),
-					persistentScenario: true,
-				})
+						true,
+						project,
+					)
+				}
+				project = await projects.resolveTemporarySource(target.project)
+				await project.flushSourceChanges()
+				return captureResult(
+					await project.session.previewSource({ ...request, source: target.code }),
+					false,
+					project,
+				)
+			} catch (error) {
+				return errorResult(error, project)
 			}
-			return handleCapture({
-				operation: () => session.previewSource({ ...request, source: target.code }),
-				persistentScenario: false,
-			})
 		},
 	)
 
 	return {
 		close: async () => {
-			watcher?.close()
-			await Promise.allSettled([session.close(), server.close()])
+			await Promise.allSettled([projects.close(), server.close()])
 		},
 		server,
-		workspace,
 	}
 }

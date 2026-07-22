@@ -2,16 +2,16 @@
 
 ## MCP loop
 
-The MCP server owns one renderer session, local asset server, and reused browser. Prefer it for autonomous iteration because each capture returns structured diagnostics and the PNG image in the same call.
+The MCP server derives a React project for each request and caches one renderer session, local asset server, and browser per project. Prefer it for autonomous iteration because each capture returns structured diagnostics and the PNG image in the same call.
 
-1. Inspect `component-shot/setup.tsx` and existing scenarios with normal filesystem tools.
+1. Inspect any `component-shot/setup.*` and existing scenarios with normal filesystem tools.
 2. Edit a real component and scenario, or prepare complete TSX for a disposable prototype.
 3. Call `capture_component_shot` with a scenario or source target.
 4. Inspect the image returned by the tool itself.
 5. Iterate with another capture after each meaningful visual change.
 6. Add `persistAs` or `saveScreenshot` only when source or pixels should remain.
 
-`persistAs` writes only inside the configured scenario root and never overwrites an existing file. A `saveScreenshot` file path is constrained to the configured project root. Gallery history requires a persistent scenario.
+An existing scenario path derives its project. Temporary source requires `project`. A repository-relative or absolute `persistAs` path derives its project when it points inside `<project>/component-shot/scenarios`. Supplying `project` with either anchored mode is allowed when it agrees with the path. `persistAs` never overwrites an existing file, `saveScreenshot` file paths are relative to the resolved project, and gallery history requires a persistent scenario.
 
 ## Existing scenario
 
@@ -40,9 +40,11 @@ export default {
 }
 ```
 
-Relative imports resolve from the scenario file location. For reusable source, choose a nested `persistAs` path deliberately so imports stay understandable.
+Relative imports resolve from the scenario file location. Temporary source is staged in `<project>/component-shot/scenarios`; persisted source resolves from its `persistAs` destination. Choose nested paths deliberately so imports stay understandable.
 
-Capture temporary source by passing `{ "type": "source", "code": "..." }`. Add `persistAs` to retain it as a gallery scenario. Use `area: { "type": "element", "selector": "[data-shot=menu]" }` to render a complete composition while returning only one region.
+Capture temporary source by passing `{ "type": "source", "project": "apps/web", "code": "..." }`. To retain it, add a self-locating path such as `"persistAs": "apps/web/component-shot/scenarios/navigation/menu-open.tsx"`; `project` may then be omitted or retained as a consistency check. Use `area: { "type": "element", "selector": "[data-shot=menu]" }` to render a complete composition while returning only one region.
+
+Component Shot loads `<project>/component-shot/setup.*` when present and otherwise uses its no-op provider. When a capture fails without setup, the MCP error includes that context without assuming providers were necessarily the cause.
 
 ## Setup commands
 
@@ -66,13 +68,15 @@ component-shot gallery
 component-shot list --json
 ```
 
+`gallery`, `list`, and `doctor` prefer the current project's `component-shot/scenarios` directory and otherwise auto-select one nested Component Shot project. In a monorepo with several configured apps, pass `--cwd apps/web` (or an explicit `--scenario-dir`) to select one; the CLI lists the candidates instead of opening an empty gallery.
+
 Useful flags include `--viewport 390x844`, `--full-page`, `--selector`, `--wait-for`, `--setup`, `--scenario-dir`, `--screenshots-dir`, `--allow-network`, and `--animations allow`.
 
 ## Failures
 
 Errors identify a stage: `discover`, `build`, `serve`, `render`, `capture`, or `artifact`.
 
-- `discover`: verify project, scenario, setup, and output paths.
+- `discover`: verify project, scenario, `persistAs`, setup, and output paths.
 - `build`: inspect scenario imports and run the app typecheck.
 - `render`: inspect provider errors, browser console diagnostics, and readiness hooks.
 - `capture`: verify selector visibility and viewport bounds.

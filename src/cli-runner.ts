@@ -1,4 +1,5 @@
 import type { ComponentShotBuild, ComponentShotBuildContext } from './build-types.js'
+import { resolveComponentShotCliWorkspace } from './cli-workspace.js'
 import {
 	captureComponentShot,
 	captureComponentSource,
@@ -464,9 +465,13 @@ export const runComponentShotCli = async ({
 				process.stdout.write(`${commandUsage.doctor}\n`)
 				return
 			}
-			const result = await runComponentShotDoctor({
+			const workspace = await resolveComponentShotCliWorkspace({
 				cwd: parsed.cwd as string | undefined,
 				scenarioDir: parsed['scenario-dir'] as string | undefined,
+			})
+			const result = await runComponentShotDoctor({
+				cwd: workspace.cwd,
+				scenarioDir: workspace.scenarioDir,
 				screenshotsDir: parsed['screenshots-dir'] as string | undefined,
 				setup: parsed.setup as string | undefined,
 			})
@@ -503,9 +508,13 @@ export const runComponentShotCli = async ({
 				process.stdout.write(`${commandUsage.list}\n`)
 				return
 			}
-			const workspace = await createComponentShotWorkspace({
+			const resolvedWorkspace = await resolveComponentShotCliWorkspace({
 				cwd: parsed.cwd as string | undefined,
 				scenarioDir: parsed['scenario-dir'] as string | undefined,
+			})
+			const workspace = await createComponentShotWorkspace({
+				cwd: resolvedWorkspace.cwd,
+				scenarioDir: resolvedWorkspace.scenarioDir,
 				screenshotsDir: parsed['screenshots-dir'] as string | undefined,
 			})
 			printResult(await workspace.listScenarios(), Boolean(parsed.json))

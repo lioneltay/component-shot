@@ -5,9 +5,11 @@ import path from 'node:path'
 import test from 'node:test'
 import {
   initializeComponentShot,
+	installComponentShotMcpConfig,
   installComponentShotSkill,
   runComponentShotDoctor,
 } from '../dist/index.js'
+import { resolveComponentShotCliWorkspace } from '../dist/cli-workspace.js'
 import { assertPathWithin, getScenarioInfo } from '../dist/scenarios.js'
 
 const repoRoot = path.resolve(import.meta.dirname, '..')
@@ -46,6 +48,22 @@ test('skill installer copies the complete package and customizes its identity', 
   }
 })
 
+test('MCP installer writes a generic server without workspace environment variables', async () => {
+	const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'component-shot-mcp-config-test-'))
+	try {
+		const result = await installComponentShotMcpConfig({ cwd })
+		assert.equal(result.changed, true)
+		const config = await fs.readFile(result.configPath, 'utf8')
+		assert.match(config, /\[mcp_servers\.component-shot\]/)
+		assert.match(config, /cwd = /)
+		assert.doesNotMatch(config, /COMPONENT_SHOT_PROJECT_ROOT/)
+		assert.doesNotMatch(config, /COMPONENT_SHOT_SCENARIO_DIR/)
+		assert.doesNotMatch(config, /\[mcp_servers\.component-shot\.env\]/)
+	} finally {
+		await fs.rm(cwd, { force: true, recursive: true })
+	}
+})
+
 test('repo-local skill matches the canonical packaged skill', async () => {
   const canonical = path.join(repoRoot, 'skill/component-shot')
   const installed = path.join(repoRoot, '.codex/skills/component-shot')
@@ -69,6 +87,40 @@ test('repo-local skill matches the canonical packaged skill', async () => {
     }
   }
   await compareDirectory()
+})
+
+test('CLI workspace discovery selects one nested project and reports monorepo ambiguity', async () => {
+	const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'component-shot-discovery-test-'))
+	const webProject = path.join(cwd, 'packages', 'web')
+	try {
+		await fs.mkdir(path.join(webProject, 'component-shot', 'scenarios'), { recursive: true })
+		const discovered = await resolveComponentShotCliWorkspace({ cwd })
+		assert.equal(discovered.autoDiscovered, true)
+		assert.equal(discovered.cwd, webProject)
+
+		const explicit = await resolveComponentShotCliWorkspace({
+			cwd,
+			scenarioDir: 'custom/scenarios',
+		})
+		assert.equal(explicit.autoDiscovered, false)
+		assert.equal(explicit.cwd, cwd)
+		assert.equal(explicit.scenarioDir, 'custom/scenarios')
+
+		await fs.mkdir(path.join(cwd, 'apps', 'admin', 'component-shot', 'scenarios'), {
+			recursive: true,
+		})
+		await assert.rejects(
+			() => resolveComponentShotCliWorkspace({ cwd }),
+			/Multiple Component Shot projects found/,
+		)
+
+		await fs.mkdir(path.join(cwd, 'component-shot', 'scenarios'), { recursive: true })
+		const currentProject = await resolveComponentShotCliWorkspace({ cwd })
+		assert.equal(currentProject.autoDiscovered, false)
+		assert.equal(currentProject.cwd, cwd)
+	} finally {
+		await fs.rm(cwd, { force: true, recursive: true })
+	}
 })
 
 test('path containment rejects traversal through a symlink', async () => {

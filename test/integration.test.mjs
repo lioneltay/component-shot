@@ -385,6 +385,7 @@ test('read-only gallery blocks every artifact and source mutation', async () => 
 })
 
 test('MCP exposes one capture tool for source, scenarios, focused regions, and artifacts', async () => {
+	const demoRoot = path.join(repoRoot, 'demo')
   const watchedScenario = path.join(
     repoRoot,
     scenarioDir,
@@ -399,9 +400,10 @@ test('MCP exposes one capture tool for source, scenarios, focused regions, and a
     `mcp-persisted-${randomUUID()}.tsx`,
   )
   const persistedScenarioRelative = path.relative(repoRoot, persistedScenario)
-  const exportDir = path.join(repoRoot, `.component-shot-mcp-export-${randomUUID()}`)
-  const exportRelative = path.relative(repoRoot, path.join(exportDir, 'focused-card.png'))
-  const screenshotsDir = await fs.mkdtemp(path.join(os.tmpdir(), 'component-shot-mcp-history-'))
+	const exportDir = path.join(demoRoot, `.component-shot-mcp-export-${randomUUID()}`)
+	const exportRelative = path.relative(demoRoot, path.join(exportDir, 'focused-card.png'))
+	const zeroSetupProject = path.join(repoRoot, `.component-shot-zero-setup-${randomUUID()}`)
+	await fs.mkdir(zeroSetupProject)
   await fs.mkdir(path.dirname(watchedScenario), { recursive: true })
   const writeWatchedScenario = (color) =>
     fs.writeFile(
@@ -410,11 +412,7 @@ test('MCP exposes one capture tool for source, scenarios, focused regions, and a
       'utf8',
     )
   await writeWatchedScenario('#dc2626')
-  const service = await createComponentShotMcpServer({
-    projectRoot: repoRoot,
-    scenarioDir,
-    screenshotsDir,
-  })
+	const service = await createComponentShotMcpServer({ cwd: repoRoot })
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
   const client = new Client({ name: 'component-shot-test', version: '1.0.0' })
   await service.server.connect(serverTransport)
@@ -443,6 +441,7 @@ test('MCP exposes one capture tool for source, scenarios, focused regions, and a
           viewport: { width: 360, height: 300 },
           render: () => <div style={{ padding: 24 }}>Agent can inspect this image now</div>,
         }`,
+			project: 'demo',
           type: 'source',
         },
       },
@@ -453,6 +452,11 @@ test('MCP exposes one capture tool for source, scenarios, focused regions, and a
     assert.deepEqual(preview.structuredContent.viewport, { height: 300, width: 360 })
     assert.equal(preview.structuredContent.persistentScenario, false)
     assert.equal(preview.structuredContent.scenarioPath, undefined)
+		assert.equal(preview.structuredContent.projectRoot, demoRoot)
+		assert.deepEqual(preview.structuredContent.setup, {
+			mode: 'project',
+			path: path.join(demoRoot, 'component-shot/setup.tsx'),
+		})
     const previewImage = preview.content.find((item) => item.type === 'image')
     assert.deepEqual(readPngSize(Buffer.from(previewImage.data, 'base64')), {
       height: 300,
@@ -467,6 +471,7 @@ test('MCP exposes one capture tool for source, scenarios, focused regions, and a
             viewport: { width: 320, height: 240 },
             render: () => <div style={{ height: 640, background: '#f8fafc' }}>Long composition</div>,
           }`,
+			project: 'demo',
           type: 'source',
         },
       },
@@ -490,6 +495,7 @@ test('MCP exposes one capture tool for source, scenarios, focused regions, and a
             </main>,
           }`,
           persistAs: persistedScenarioRelative,
+			project: 'demo',
           type: 'source',
         },
       },
@@ -533,20 +539,22 @@ test('MCP exposes one capture tool for source, scenarios, focused regions, and a
             viewport: { width: 320, height: 240 },
             render: () => <div>Standalone documentation image</div>,
           }`,
+			project: 'demo',
           type: 'source',
         },
       },
       name: 'capture_component_shot',
     })
-    assert.equal(exported.structuredContent.outputPath, path.join(repoRoot, exportRelative))
+		assert.equal(exported.structuredContent.outputPath, path.join(demoRoot, exportRelative))
     assert.equal(exported.structuredContent.persistentScenario, false)
-    await assertPng(path.join(repoRoot, exportRelative))
+		await assertPng(path.join(demoRoot, exportRelative))
 
     const invalidHistory = await client.callTool({
       arguments: {
         saveScreenshot: { type: 'history' },
         target: {
           code: 'export default { render: () => <div>Invalid history</div> }',
+			project: 'demo',
           type: 'source',
         },
       },
@@ -558,8 +566,91 @@ test('MCP exposes one capture tool for source, scenarios, focused regions, and a
       /Gallery history requires an existing scenario or source with persistAs/,
     )
 
+		const missingProject = await client.callTool({
+			arguments: {
+				target: {
+					code: 'export default { render: () => <div>Missing project</div> }',
+					type: 'source',
+				},
+			},
+			name: 'capture_component_shot',
+		})
+		assert.equal(missingProject.isError, true)
+		assert.match(missingProject.content.find((item) => item.type === 'text').text, /project/i)
+
+		const zeroSetup = await client.callTool({
+			arguments: {
+				target: {
+					code: 'export default { render: () => <div>Zero setup works</div> }',
+					project: path.relative(repoRoot, zeroSetupProject),
+					type: 'source',
+				},
+			},
+			name: 'capture_component_shot',
+		})
+		assert.equal(zeroSetup.isError ?? false, false)
+		assert.equal(zeroSetup.structuredContent.projectRoot, zeroSetupProject)
+		assert.deepEqual(zeroSetup.structuredContent.setup, { mode: 'default' })
+
+		const missingProviderHint = await client.callTool({
+			arguments: {
+				target: {
+					code: `export default {
+						render: () => { throw new Error('Missing application context') },
+					}`,
+					project: path.relative(repoRoot, zeroSetupProject),
+					type: 'source',
+				},
+			},
+			name: 'capture_component_shot',
+		})
+		assert.equal(missingProviderHint.isError, true)
+		assert.match(
+			missingProviderHint.content.find((item) => item.type === 'text').text,
+			/No Component Shot setup was found/,
+		)
+		await assert.rejects(
+			fs.access(path.join(zeroSetupProject, 'component-shot')),
+			(error) => error?.code === 'ENOENT',
+		)
+
+		const conflictingProject = await client.callTool({
+			arguments: {
+				target: {
+					path: watchedScenarioRelative,
+					project: '.',
+					type: 'scenario',
+				},
+			},
+			name: 'capture_component_shot',
+		})
+		assert.equal(conflictingProject.isError, true)
+		assert.match(
+			conflictingProject.content.find((item) => item.type === 'text').text,
+			/conflicts with scenario/i,
+		)
+
+		const conflictingPersistAs = await client.callTool({
+			arguments: {
+				target: {
+					code: 'export default { render: () => <div>Conflicting project</div> }',
+					persistAs: persistedScenarioRelative,
+					project: '.',
+					type: 'source',
+				},
+			},
+			name: 'capture_component_shot',
+		})
+		assert.equal(conflictingPersistAs.isError, true)
+		assert.match(
+			conflictingPersistAs.content.find((item) => item.type === 'text').text,
+			/conflicts with persistAs path/i,
+		)
+
     const firstCapture = await client.callTool({
-      arguments: { target: { path: watchedScenarioRelative, type: 'scenario' } },
+			arguments: {
+				target: { path: watchedScenarioRelative, project: 'demo', type: 'scenario' },
+			},
       name: 'capture_component_shot',
     })
     await writeWatchedScenario('#2563eb')
@@ -577,8 +668,12 @@ test('MCP exposes one capture tool for source, scenarios, focused regions, and a
     await Promise.all([
       fs.rm(exportDir, { force: true, recursive: true }),
       fs.rm(persistedScenario, { force: true }),
-      fs.rm(screenshotsDir, { force: true, recursive: true }),
-      fs.rm(watchedScenario, { force: true }),
+			fs.rm(path.join(demoRoot, 'component-shot/screenshots/.states', path.basename(persistedScenario, '.tsx')), {
+				force: true,
+				recursive: true,
+			}),
+			fs.rm(watchedScenario, { force: true }),
+			fs.rm(zeroSetupProject, { force: true, recursive: true }),
     ])
   }
 })
@@ -586,7 +681,6 @@ test('MCP exposes one capture tool for source, scenarios, focused regions, and a
 test('MCP stdio process shuts down when its client closes stdin', async () => {
   const child = spawn(process.execPath, [path.join(repoRoot, 'dist/mcp.js')], {
     cwd: repoRoot,
-    env: { ...process.env, COMPONENT_SHOT_PROJECT_ROOT: repoRoot },
     stdio: ['pipe', 'pipe', 'pipe'],
   })
   child.stdin.end()

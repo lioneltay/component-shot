@@ -5,6 +5,7 @@ import http from 'node:http'
 import path from 'node:path'
 import { findLatestArtifact, listHistory } from './artifacts.js'
 import type { ComponentShotBuild, ComponentShotRenderProtocol } from './build-types.js'
+import { resolveComponentShotCliWorkspace } from './cli-workspace.js'
 import { createGalleryHtml } from './gallery-ui.js'
 import type { ComponentShotGalleryScenarioView } from './gallery-types.js'
 import type { ComponentShotRspackOptions } from './rspack.js'
@@ -701,7 +702,7 @@ const createGalleryUsage = (usageCommand: string) => `Usage:
 Options:
   --scenario-dir <path>     Scenario directory. Defaults to component-shot/scenarios.
   --screenshots-dir <path>  Screenshot history directory beside the scenarios.
-  --cwd <path>              Project root. Defaults to the current directory.
+  --cwd <path>              Project or search root. One nested project is auto-discovered.
   --setup <path>            React provider setup module.
   --browser-channel <id>    System browser channel, for example chrome.
   --host <host>             Host to bind. Defaults to 127.0.0.1.
@@ -832,8 +833,16 @@ export const runComponentShotGalleryCli = async ({
 		return
 	}
 	const { help: _help, json, ...cliOptions } = parsed
-	const gallery = await startComponentShotGallery({ ...baseOptions, ...cliOptions })
+	const requestedOptions = { ...baseOptions, ...cliOptions }
+	const workspace = await resolveComponentShotCliWorkspace(requestedOptions)
+	const gallery = await startComponentShotGallery({
+		...requestedOptions,
+		cwd: workspace.cwd,
+		scenarioDir: workspace.scenarioDir,
+	})
 	const startupDetails = {
+		autoDiscovered: workspace.autoDiscovered,
+		projectRoot: gallery.index.cwd,
 		scenarioCount: gallery.index.scenarios.length,
 		scenarioDir: gallery.index.scenarioDir,
 		url: gallery.url,
@@ -842,6 +851,9 @@ export const runComponentShotGalleryCli = async ({
 		process.stdout.write(`${JSON.stringify(startupDetails)}\n`)
 	} else {
 		process.stdout.write(`Component Shot gallery: ${gallery.url}\n`)
+		if (workspace.autoDiscovered) {
+			process.stdout.write(`Project: ${gallery.index.cwd}\n`)
+		}
 		process.stdout.write('Press Ctrl+C to stop.\n')
 	}
 	if (baseOptions.open ?? cliOptions.open ?? true) openUrl(gallery.url)

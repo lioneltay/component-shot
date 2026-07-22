@@ -867,6 +867,10 @@ export const createComponentShotSession = async (
 	}
 
 	const writeSource = async (request: ComponentShotSourceRequest, previewOnly: boolean) => {
+		const componentShotDir = path.dirname(paths.scenarioDir)
+		const [componentShotDirExisted, scenarioDirExisted] = previewOnly
+			? await Promise.all([pathExists(componentShotDir), pathExists(paths.scenarioDir)])
+			: [true, true]
 		const scenarioPath = previewOnly
 			? await assertPathWithin({
 					candidate: path.join(
@@ -884,22 +888,26 @@ export const createComponentShotSession = async (
 				})
 		await fs.mkdir(path.dirname(scenarioPath), { recursive: true })
 		try {
-			await fs.writeFile(scenarioPath, request.source.endsWith('\n') ? request.source : `${request.source}\n`, {
-				encoding: 'utf8',
-				flag: previewOnly || request.overwrite ? 'w' : 'wx',
-			})
-		} catch (error) {
-			const code = typeof error === 'object' && error && 'code' in error ? error.code : undefined
-			if (code === 'EEXIST') {
-				throw new ComponentShotError(
-					'artifact',
-					`${scenarioPath} already exists. Edit the existing scenario or use overwrite only when replacement is intentional.`,
+			try {
+				await fs.writeFile(
+					scenarioPath,
+					request.source.endsWith('\n') ? request.source : `${request.source}\n`,
+					{
+						encoding: 'utf8',
+						flag: previewOnly || request.overwrite ? 'w' : 'wx',
+					},
 				)
+			} catch (error) {
+				const code = typeof error === 'object' && error && 'code' in error ? error.code : undefined
+				if (code === 'EEXIST') {
+					throw new ComponentShotError(
+						'artifact',
+						`${scenarioPath} already exists. Edit the existing scenario or use overwrite only when replacement is intentional.`,
+					)
+				}
+				throw error
 			}
-			throw error
-		}
 
-		try {
 			await invalidate([scenarioPath])
 			const result = await capture({
 				...request,
@@ -910,6 +918,18 @@ export const createComponentShotSession = async (
 		} finally {
 			if (previewOnly) {
 				await fs.rm(scenarioPath, { force: true })
+				const removeIfNewAndEmpty = async (directory: string, existed: boolean) => {
+					if (existed) return
+					try {
+						await fs.rmdir(directory)
+					} catch (error) {
+						const code =
+							typeof error === 'object' && error && 'code' in error ? error.code : undefined
+						if (code !== 'ENOENT' && code !== 'ENOTEMPTY') throw error
+					}
+				}
+				await removeIfNewAndEmpty(paths.scenarioDir, scenarioDirExisted)
+				await removeIfNewAndEmpty(componentShotDir, componentShotDirExisted)
 			}
 		}
 	}

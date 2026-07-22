@@ -25,7 +25,7 @@ An agent edits the production React component, mounts it in a focused scenario w
 
 ### Prototype UI Before Integration
 
-An agent passes complete TSX directly for an immediate disposable capture, adds `persistAs` when the user should see the state in the gallery, and turns the accepted prototype into production components later.
+An agent passes complete TSX plus the React project directory for an immediate disposable capture, adds a self-locating `persistAs` path when the user should see the state in the gallery, and turns the accepted prototype into production components later.
 
 ### Inspect Intermediate And Hard-To-Reach States
 
@@ -55,7 +55,7 @@ A failing UI state becomes a scenario that can be captured repeatedly, shared in
 
 1. Inspect the Component Shot workspace and existing scenarios with normal filesystem tools.
 2. Reuse the real component and setup provider when practical.
-3. Edit a deterministic scenario, or provide complete TSX directly for a disposable prototype.
+3. Edit a deterministic scenario, or provide complete TSX and its React project directory for a disposable prototype.
 4. Call the single `capture_component_shot` tool and receive the image in the same call.
 5. Inspect the image and diagnostics, edit the component or scenario, and repeat.
 6. Persist source, save history, or export an artifact only when the state is worth retaining.
@@ -78,6 +78,7 @@ A failing UI state becomes a scenario that can be captured repeatedly, shared in
 - **Fast by default**: reuse compilers, servers, and browsers during iteration.
 - **Deterministic by default**: no accidental live network, remote fonts, animation timing, or host-specific locale state.
 - **One visual tool**: one MCP operation accepts source or a scenario and always returns the rendered pixels.
+- **Projects are request-scoped**: scenario and `persistAs` paths self-locate; only temporary source must name its React project.
 - **One state, one identity**: scenario IDs, history, exports, gallery routes, and MCP results use the same key.
 - **Preview is read-like**: looking at pixels does not silently create persistent artifacts.
 - **Writes are explicit**: `persistAs` retains source and `saveScreenshot` retains pixels; omission leaves both ephemeral.

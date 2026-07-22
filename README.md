@@ -146,34 +146,38 @@ Or render complete source immediately without keeping it:
 {
   "target": {
     "type": "source",
+    "project": ".",
     "code": "export default { render: () => <button>Continue</button> }"
   },
   "area": { "type": "element", "selector": "button" }
 }
 ```
 
-Add `target.persistAs` to retain source as a reusable gallery scenario. Add `saveScreenshot: { "type": "history" }` for gallery history, or `{ "type": "file", "path": "docs/images/example.png" }` for a stable artifact. History requires a persistent scenario; explicit file export also works with temporary source. Every successful call returns the image regardless of persistence.
+Temporary source requires `target.project`, relative to the MCP process working directory or absolute, because it has no filesystem location from which to resolve React, imports, `tsconfig.json`, or providers. Existing scenario paths derive their project automatically. To retain source, provide a repository-relative or absolute `target.persistAs` inside `<project>/component-shot/scenarios`; that path also derives the project, so `target.project` is optional. When supplied with a scenario or `persistAs`, `project` must agree with the path.
+
+Add `saveScreenshot: { "type": "history" }` for gallery history, or `{ "type": "file", "path": "docs/images/example.png" }` for a stable artifact relative to the resolved project. History requires a persistent scenario; explicit file export also works with temporary source. Every successful call returns the image regardless of persistence.
 
 Capture area defaults to the visible viewport. Use `{ "type": "page" }` for the full scrollable document or `{ "type": "element", "selector": "[data-shot=dialog]" }` to render a complex composition while returning only its first matching visible element. Stable `data-shot` selectors are preferable to styling selectors.
 
-The MCP process keeps one renderer session alive. Scenario writes are constrained to the configured scenario root, output files are constrained to the project root, and `persistAs` never overwrites an existing scenario. Workspace discovery and source editing use the agent's normal filesystem tools.
+The MCP process derives projects per request and keeps one renderer session alive for each project it touches. It discovers `<project>/component-shot/setup.*` when present and otherwise renders with a no-op provider. Scenario writes are constrained to `<project>/component-shot/scenarios`, output files are constrained to the resolved project, and `persistAs` never overwrites an existing scenario.
 
-The installer writes `.codex/config.toml`. For another MCP client, run the binary with:
+Structured results include the resolved `projectRoot` and setup mode (`project`, `configured`, `default`, or `custom-build`) so an agent can verify the rendering context it actually used.
+
+The installer writes a generic repository-local server entry to `.codex/config.toml`. For another MCP client, run the binary from the repository or monorepo root:
 
 ```text
-COMPONENT_SHOT_PROJECT_ROOT=/path/to/app
-COMPONENT_SHOT_SCENARIO_DIR=component-shot/scenarios
-COMPONENT_SHOT_SCREENSHOTS_DIR=component-shot/screenshots
-COMPONENT_SHOT_BROWSER_CHANNEL=chrome
+component-shot-mcp
 ```
 
-Only `COMPONENT_SHOT_PROJECT_ROOT` is normally needed. All paths are resolved once when the server starts.
+No workspace environment variables are required. `COMPONENT_SHOT_BROWSER_CHANNEL` remains available as an optional browser override. Relative `project`, scenario, and `persistAs` paths are resolved from the MCP process working directory, so one server can render every conventionally structured app in a monorepo.
 
 ## Gallery
 
 ```bash
 component-shot gallery [options]
 ```
+
+Run the command from a React project or a monorepo root. Component Shot prefers a scenario directory in the current project, auto-selects a single nested project such as `packages/client`, and reports the available project paths when more than one is found. Use `--cwd packages/client` to choose explicitly in a multi-app repository.
 
 The gallery is an operational master-detail workbench rather than a static screenshot grid:
 
@@ -192,6 +196,7 @@ Live uses the viewer's browser so it remains immediate and inspectable. Capture 
 Common options:
 
 ```bash
+component-shot gallery --cwd packages/client
 component-shot gallery --scenario-dir packages/web/component-shot/scenarios
 component-shot gallery --screenshots-dir .artifacts/component-shot
 component-shot gallery --read-only --no-open --port 4400

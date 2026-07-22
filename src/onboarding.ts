@@ -225,10 +225,6 @@ args = ${JSON.stringify(invocation.args)}
 cwd = ${JSON.stringify(paths.cwd)}
 startup_timeout_sec = 30
 tool_timeout_sec = 120
-
-[mcp_servers.component-shot.env]
-COMPONENT_SHOT_PROJECT_ROOT = ${JSON.stringify(paths.cwd)}
-COMPONENT_SHOT_SCENARIO_DIR = ${JSON.stringify(path.relative(paths.cwd, paths.scenarioDir))}
 `
 	await fs.mkdir(path.dirname(configPath), { recursive: true })
 	await fs.writeFile(configPath, `${current.trimEnd()}${current.trim() ? '\n\n' : ''}${block}`, 'utf8')
