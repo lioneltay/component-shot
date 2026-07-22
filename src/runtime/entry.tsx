@@ -1,7 +1,9 @@
 import scenarioExport from '__component_shot_scenario__'
 import setupExport from '__component_shot_setup__'
+import protocolExport from '__component_shot_protocol__'
 import React, { type CSSProperties, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { componentShotDefaultProtocol } from '../build-types.js'
 import type {
 	ComponentShotAppSetup,
 	ComponentShotScenario,
@@ -11,6 +13,7 @@ import type {
 declare global {
 	interface Window {
 		__COMPONENT_SHOT_ERROR__?: string
+		__COMPONENT_SHOT_METADATA__?: Record<string, unknown>
 		__COMPONENT_SHOT_READY__?: boolean
 	}
 }
@@ -18,6 +21,28 @@ declare global {
 const defaultRootStyle: CSSProperties = {
 	display: 'inline-block',
 	maxWidth: '100%',
+}
+
+const protocol = {
+	continueGlobal: protocolExport?.continueGlobal ?? componentShotDefaultProtocol.continueGlobal,
+	errorGlobal: protocolExport?.errorGlobal ?? componentShotDefaultProtocol.errorGlobal,
+	metadataGlobal: protocolExport?.metadataGlobal ?? componentShotDefaultProtocol.metadataGlobal,
+	readyGlobal: protocolExport?.readyGlobal ?? componentShotDefaultProtocol.readyGlobal,
+}
+
+const windowState = window as unknown as Record<string, unknown>
+
+const notifyParent = (type: 'error' | 'layout' | 'ready', details?: Record<string, unknown>) => {
+	if (window.parent === window) {
+		return
+	}
+	window.parent.postMessage(
+		{
+			...details,
+			type: `component-shot:${type}`,
+		},
+		'*',
+	)
 }
 
 const nextFrame = () =>
@@ -35,6 +60,20 @@ const nextFrame = () =>
 		})
 		window.setTimeout(finish, 100)
 	})
+
+const waitForCaptureHost = async () => {
+	if (!new URLSearchParams(window.location.search).has('component-shot-capture')) return
+	await new Promise<void>((resolve) => {
+		const check = () => {
+			if (windowState[protocol.continueGlobal] === true) {
+				resolve()
+				return
+			}
+			window.setTimeout(check, 5)
+		}
+		check()
+	})
+}
 
 const isScenarioObject = (
 	scenario: ComponentShotScenario,
@@ -71,8 +110,9 @@ const renderScenario = async (
 }
 
 const mount = async () => {
-	window.__COMPONENT_SHOT_READY__ = false
-	window.__COMPONENT_SHOT_ERROR__ = undefined
+	windowState[protocol.continueGlobal] = false
+	windowState[protocol.readyGlobal] = false
+	windowState[protocol.errorGlobal] = undefined
 
 	const rootElement = document.getElementById('root')
 	if (!rootElement) {
@@ -80,6 +120,18 @@ const mount = async () => {
 	}
 
 	const appSetup = setupExport ?? {}
+	const staticScenario = isScenarioObject(scenarioExport) ? scenarioExport : undefined
+	windowState[protocol.metadataGlobal] = staticScenario
+		? {
+				capture: staticScenario.capture,
+				description: staticScenario.description,
+				environment: staticScenario.environment,
+				tags: staticScenario.tags,
+				title: staticScenario.title,
+				viewport: staticScenario.viewport,
+			}
+		: {}
+	await waitForCaptureHost()
 	const { node, objectScenario } = await renderScenario(scenarioExport)
 	const Wrapper = objectScenario?.wrapper
 	const Provider = appSetup.Provider
@@ -98,15 +150,59 @@ const mount = async () => {
 	)
 
 	await nextFrame()
+	await objectScenario?.afterRender?.()
+	await nextFrame()
 	await objectScenario?.beforeScreenshot?.()
 	await nextFrame()
-	window.__COMPONENT_SHOT_READY__ = true
+	const captureSelector = objectScenario?.capture?.selector ?? '[data-component-shot-root]'
+	const readFrameDetails = () => {
+		const captureElement = document.querySelector(captureSelector)
+		const bounds = captureElement?.getBoundingClientRect()
+		return {
+			bounds: bounds
+				? {
+						height: bounds.height,
+						width: bounds.width,
+						x: bounds.x,
+						y: bounds.y,
+					}
+				: undefined,
+			frameViewport: { height: window.innerHeight, width: window.innerWidth },
+		}
+	}
+	let layoutFrame: number | undefined
+	const scheduleLayout = () => {
+		if (layoutFrame !== undefined) return
+		layoutFrame = window.requestAnimationFrame(() => {
+			layoutFrame = window.requestAnimationFrame(() => {
+				layoutFrame = undefined
+				notifyParent('layout', readFrameDetails())
+			})
+		})
+	}
+	window.addEventListener('resize', scheduleLayout)
+	window.addEventListener('message', (event) => {
+		if (
+			event.source === window.parent &&
+			event.data &&
+			typeof event.data === 'object' &&
+			(event.data as { type?: string }).type === 'component-shot:request-layout'
+		) {
+			notifyParent('layout', readFrameDetails())
+		}
+	})
+	windowState[protocol.readyGlobal] = true
+	notifyParent('ready', {
+		...readFrameDetails(),
+		metadata: windowState[protocol.metadataGlobal],
+	})
 }
 
 mount().catch((error: unknown) => {
 	const message = error instanceof Error ? (error.stack ?? error.message) : String(error)
-	window.__COMPONENT_SHOT_ERROR__ = message
-	window.__COMPONENT_SHOT_READY__ = true
+	windowState[protocol.errorGlobal] = message
+	windowState[protocol.readyGlobal] = true
+	notifyParent('error', { message })
 
 	const rootElement = document.getElementById('root')
 	if (rootElement) {

@@ -1,8 +1,11 @@
-import type { ComponentShotScenarioObject } from '@lioneltay/component-shot'
 import { ProductCard } from '../../src/components/ProductCard'
-import type { DemoShotProviderOptions } from '../setup'
+import { scenario } from '../setup'
 
-const scenario: ComponentShotScenarioObject<DemoShotProviderOptions> = {
+export default scenario({
+  title: 'Featured product card',
+  description: 'Default purchasable product with a promotional badge.',
+  tags: ['card', 'commerce', 'default'],
+  viewport: { width: 720, height: 560 },
   providerOptions: {
     accent: '#2563eb',
     surface: '#f8fbff',
@@ -21,6 +24,4 @@ const scenario: ComponentShotScenarioObject<DemoShotProviderOptions> = {
     display: 'block',
     width: 380,
   },
-}
-
-export default scenario
+})

@@ -15,10 +15,29 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    }
+    },
+    "./gallery": {
+      "types": "./dist/gallery.d.ts",
+      "default": "./dist/gallery.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp-server.d.ts",
+      "default": "./dist/mcp-server.js"
+    },
+    "./react": {
+      "types": "./dist/runtime/types.d.ts",
+      "default": "./dist/runtime/types.js"
+    },
+    "./rspack": {
+      "types": "./dist/rspack.d.ts",
+      "default": "./dist/rspack.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
+    "docs",
+    "skill",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
@@ -41,26 +60,29 @@
     "codex"
   ],
   "engines": {
-    "node": ">=20.11"
+    "node": "^20.19.0 || >=22.12.0"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "browsers": "playwright install chromium",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node dist/build-gallery-client.js",
     "check": "tsc -p tsconfig.json --noEmit",
     "prepare": "pnpm build",
     "prepublishOnly": "pnpm verify",
-    "release:dry-run": "pnpm verify && npm pack --dry-run",
-    "release:publish": "pnpm verify && npm publish --access public",
-    "verify": "pnpm check && pnpm build && pnpm --dir demo build"
+    "release:dry-run": "pnpm verify && npm pack --dry-run --ignore-scripts",
+    "release:publish": "npm publish --access public",
+    "test": "pnpm build && node --test --test-concurrency=1 test/*.test.mjs",
+    "test:package": "node test/package-smoke.mjs",
+    "verify": "pnpm test && pnpm test:package && pnpm --dir demo build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
     "@rspack/core": "2.0.5",
     "buffer": "6.0.3",
-    "playwright": "1.56.1"
+    "playwright": "1.56.1",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "24.10.4",

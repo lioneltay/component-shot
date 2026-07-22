@@ -19,19 +19,13 @@ const htmlTemplate = () => `<!doctype html>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Component Shot</title>
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link
-			href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap"
-			rel="stylesheet"
-		/>
 		<style>
 			html,
 			body {
 				margin: 0;
 				min-height: 100%;
 				background: #fff;
-				font-family: 'Roboto', 'Helvetica', 'Arial', sans-serif;
+				font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 			}
 
 			body {
@@ -73,8 +67,12 @@ const fileExists = async (filePath: string) => {
 	try {
 		await fs.access(filePath)
 		return true
-	} catch {
-		return false
+	} catch (error) {
+		const code = typeof error === 'object' && error && 'code' in error ? error.code : undefined
+		if (code === 'ENOENT' || code === 'ENOTDIR') {
+			return false
+		}
+		throw error
 	}
 }
 
@@ -96,7 +94,7 @@ const findWorkspaceRoot = async (cwd: string) => {
 
 const splitPathList = (value: string | undefined) =>
 	(value ?? '')
-		.split(/[,:]/)
+		.split(path.delimiter)
 		.map((entry) => entry.trim())
 		.filter(Boolean)
 
@@ -191,9 +189,12 @@ const createConfig = async ({
 	context: ComponentShotBuildContext
 	options: ComponentShotRspackOptions
 }): Promise<RspackConfiguration> => {
-	const setupPath = options.setup
-		? path.resolve(context.cwd, options.setup)
+	const configuredSetup = context.setupPath ?? options.setup
+	const setupPath = configuredSetup
+		? path.resolve(context.cwd, context.setupPath ?? options.setup ?? '')
 		: path.join(dirname, 'runtime/default-setup.js')
+	const protocolPath = path.join(context.publicDir, '.component-shot-protocol.mjs')
+	await fs.writeFile(protocolPath, `export default ${JSON.stringify(context.protocol)}\n`, 'utf8')
 	const packageDirs = options.workspacePackageDirs ?? ['packages']
 	const [workspaceAliases, dependencyModules] = await Promise.all([
 		discoverWorkspaceAliases(context.cwd, packageDirs),
@@ -211,7 +212,6 @@ const createConfig = async ({
 	return {
 		devtool: 'cheap-module-source-map',
 		entry: options.entry ? path.resolve(context.cwd, options.entry) : path.join(dirname, 'runtime/entry.js'),
-		externals: ['tinymce'],
 		mode: 'development',
 		module: {
 			rules: [
@@ -267,7 +267,7 @@ const createConfig = async ({
 		output: {
 			filename: 'component-shot.js',
 			path: context.publicDir,
-			publicPath: options.publicPath ?? '/',
+			publicPath: context.publicPath || options.publicPath || '/',
 		},
 		plugins: [
 			new rspack.HtmlRspackPlugin({
@@ -283,6 +283,7 @@ const createConfig = async ({
 				...aliases,
 				__component_shot_scenario__: context.scenarioPath,
 				__component_shot_setup__: setupPath,
+				__component_shot_protocol__: protocolPath,
 				react: resolveFromProject(context.cwd, 'react'),
 				'react-dom': resolveFromProject(context.cwd, 'react-dom'),
 				'react-dom/client': require.resolve('react-dom/client', { paths: [context.cwd, dirname] }),
@@ -290,6 +291,10 @@ const createConfig = async ({
 					paths: [context.cwd, dirname],
 				}),
 				'react/jsx-runtime': require.resolve('react/jsx-runtime', { paths: [context.cwd, dirname] }),
+			},
+			extensionAlias: {
+				'.js': ['.ts', '.tsx', '.js'],
+				'.jsx': ['.tsx', '.jsx'],
 			},
 			extensions: ['.mjs', '.js', '.jsx', '.ts', '.tsx', '.json', '.gql', '.graphql'],
 			fallback: {

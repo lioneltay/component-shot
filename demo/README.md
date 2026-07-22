@@ -9,7 +9,7 @@ From the repository root:
 ```bash
 pnpm install
 pnpm --dir demo install
-pnpm browsers
+pnpm exec component-shot browser install chromium
 ```
 
 ## Run the App
@@ -24,13 +24,9 @@ pnpm --dir demo dev
 pnpm --dir demo shot
 ```
 
-If the Playwright browser download is unavailable locally and Google Chrome is installed:
+Component Shot automatically uses an installed Chrome or Edge when its packaged Chromium is absent.
 
-```bash
-pnpm --dir demo shot:chrome
-```
-
-This captures `component-shot/scenarios/product-card.tsx` and writes:
+The gallery also includes standard, long-content, and mobile variants under `component-shot/scenarios/product-card/`. The shot command captures `product-card.tsx` and writes:
 
 ```text
 demo/component-shot/screenshots/product-card/latest.png

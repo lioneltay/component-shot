@@ -1,309 +1,306 @@
 # Component Shot
 
-Capture, inspect, and iterate React component scenarios from the command line, a live gallery, or MCP tools.
+Component Shot gives agents and people fast visual access to React UI. Mount a real application component or a prototype in a deterministic scenario, render any useful state directly, inspect the pixels, and iterate without navigating the real app.
 
-Component Shot is built for design review and agent workflows. You write small scenario files that render important UI states, then Component Shot bundles them, serves them locally, renders them in Playwright, and captures or previews the result.
+It is designed for loading, empty, error, modal, permission, responsive, and other intermediate states that are slow or unreliable to reach with ordinary screenshot workflows. The same scenarios are available through a one-call MCP capture loop, a local CLI, and a human gallery workbench.
 
-## Features
+See [Purpose and use cases](docs/use-cases.md) for the product goals and boundaries.
 
-- One-command screenshots for React scenario modules.
-- A live scenario gallery with search, column layout controls, pinning, delete, clear, and detail views.
-- Screenshot history for saved captures.
-- App-level setup providers for themes, routers, data clients, or other wrappers.
-- MCP tools that return screenshots as image content.
-- A repo-local Codex skill installer for repeatable Component Shot workflows.
-- Built-in Rspack bundling with a build-command escape hatch.
+## What It Provides
+
+- React-specific scenarios with typed provider options and reusable app setup.
+- One MCP call from complete TSX source or an existing scenario to a returned PNG image.
+- A persistent renderer session that reuses its asset server, browser, and build cache.
+- Deterministic defaults: fixed locale/timezone, reduced motion, disabled capture animations, and blocked external network.
+- A full-height gallery with searchable scenarios, Live, History, and Overview views, viewport controls, diagnostics, capture, and export.
+- Explicit local history and stable PNG export for pull requests or documentation.
+- `init`, `doctor`, browser, MCP, and agent-skill installers with no global package requirement.
 
 ## Requirements
 
-- Node.js `>=20.11`
-- React and React DOM in the app using Component Shot
-- A Playwright browser, or an installed Chrome/Edge channel
-
-Install Chromium for Playwright when needed:
-
-```bash
-pnpm exec playwright install chromium
-```
-
-If you already have Google Chrome installed, pass `--browser-channel chrome` to the capture command instead.
+- Node.js `^20.19.0 || >=22.12.0`
+- React and React DOM `>=18` in the target project
+- The packaged Playwright Chromium or a supported local Chrome/Edge installation
 
 ## Install
 
 ```bash
-pnpm add -D @lioneltay/component-shot react react-dom
+pnpm add -D @lioneltay/component-shot
+pnpm exec component-shot browser install chromium
+pnpm exec component-shot init
+pnpm exec component-shot doctor
 ```
 
-The package exposes two binaries:
+`browser install` invokes the Playwright CLI shipped with Component Shot. Captures automatically use an installed Chrome or Edge when the packaged Chromium is absent.
 
-```bash
-component-shot
-component-shot-mcp
+`init` creates:
+
+```text
+component-shot/setup.tsx
+component-shot/scenarios/example.tsx
 ```
 
-## Quick Start
+## First Scenario
 
-Create a scenario:
+Configure app providers once:
 
 ```tsx
-// component-shot/scenarios/product-card.tsx
-import type { ComponentShotScenarioObject } from '@lioneltay/component-shot'
-import { ProductCard } from '../../src/components/ProductCard'
+// component-shot/setup.tsx
+import type { ReactNode } from 'react'
+import { createComponentShot } from '@lioneltay/component-shot/react'
+import { MemoryRouter } from 'react-router-dom'
+import { AppThemeProvider } from '../src/theme/AppThemeProvider'
 
-const scenario: ComponentShotScenarioObject = {
+type ShotOptions = {
+  route?: string
+  theme?: 'light' | 'dark'
+}
+
+export const componentShot = createComponentShot<ShotOptions>()
+export const scenario = componentShot.scenario
+
+function Provider({ children, options }: { children: ReactNode; options?: ShotOptions }) {
+  return (
+    <AppThemeProvider mode={options?.theme ?? 'light'}>
+      <MemoryRouter initialEntries={[options?.route ?? '/']}>{children}</MemoryRouter>
+    </AppThemeProvider>
+  )
+}
+
+export default componentShot.setup({ Provider })
+```
+
+Mount a real component in a deliberate state:
+
+```tsx
+// component-shot/scenarios/billing/payment-failed.tsx
+import { InvoicePanel } from '../../../src/billing/InvoicePanel'
+import { scenario } from '../../setup'
+
+export default scenario({
+  title: 'Invoice payment failed',
+  description: 'Retryable card failure with a past-due invoice.',
+  tags: ['billing', 'error'],
+  viewport: { width: 1024, height: 768 },
+  providerOptions: { route: '/billing/invoices/inv_123' },
+  rootStyle: { display: 'block', width: '100%' },
   render: () => (
-    <ProductCard
-      badge="Popular"
-      ctaLabel="Add kit"
-      description="Reusable capture defaults, tuned for design review."
-      name="Shot Runner"
-      price="$49"
+    <InvoicePanel
+      invoice={{ id: 'inv_123', status: 'past_due', total: 12900 }}
+      paymentError="Card declined"
     />
   ),
-  rootStyle: {
-    display: 'block',
-    width: 380,
-  },
-}
-
-export default scenario
-```
-
-Capture it:
-
-```bash
-pnpm exec component-shot \
-  --scenario component-shot/scenarios/product-card.tsx \
-  --output /tmp/product-card.png
-```
-
-Save latest and historical screenshots:
-
-```bash
-pnpm exec component-shot \
-  --scenario component-shot/scenarios/product-card.tsx \
-  --save \
-  --json
-```
-
-This writes:
-
-```text
-component-shot/screenshots/product-card/latest.png
-component-shot/screenshots/product-card/history/<timestamp>.png
-```
-
-## App Setup
-
-Add `component-shot/setup.tsx` when scenarios need app providers:
-
-```tsx
-import type { ComponentShotAppSetup } from '@lioneltay/component-shot'
-import { ThemeProvider } from '../src/theme'
-
-const setup: ComponentShotAppSetup = {
-  Provider: ({ children }) => <ThemeProvider>{children}</ThemeProvider>,
-  rootStyle: {
-    display: 'inline-block',
-  },
-}
-
-export default setup
-```
-
-Scenario objects can opt out of the setup provider with `providerOptions: false`, or pass options to the provider with `providerOptions`.
-
-## Scenario API
-
-A scenario can export:
-
-- a React node
-- a function returning a React node
-- a `ComponentShotScenarioObject`
-
-```tsx
-import type { ComponentShotScenarioObject } from '@lioneltay/component-shot'
-
-const scenario: ComponentShotScenarioObject = {
-  setup: async () => {
-    localStorage.clear()
-  },
-  render: () => <button>Save</button>,
-  beforeScreenshot: async () => {
-    await new Promise((resolve) => window.setTimeout(resolve, 100))
-  },
-  rootStyle: {
-    display: 'inline-block',
-    width: 240,
-  },
-}
-
-export default scenario
-```
-
-Use deterministic props, mocked data, fixed dates, and stable dimensions. If the gallery clips or scales a component unexpectedly, set an explicit `rootStyle.width`.
-
-## CLI
-
-```bash
-component-shot --scenario <file.tsx> [options]
-```
-
-Common options:
-
-| Option | Description |
-| --- | --- |
-| `--scenario <path>` | Scenario module to render. |
-| `--output <path>` | PNG output path. Defaults to a temp PNG. |
-| `--save` | Write `latest.png` and a timestamped history image. |
-| `--save-name <name>` | Screenshot folder name. Defaults to scenario filename. |
-| `--screenshots-dir <path>` | Screenshot root. Defaults to `component-shot/screenshots`. |
-| `--selector <selector>` | Element to capture. Defaults to `[data-component-shot-root]`. |
-| `--full-page` | Capture the whole page instead of the component root. |
-| `--viewport <WxH>` | Browser viewport. Defaults to `1440x900`. |
-| `--wait-for <selector>` | Wait for an additional selector before capture. |
-| `--browser-channel <id>` | Use a system browser channel, for example `chrome`. |
-| `--setup <path>` | Override setup module discovery. |
-| `--build-command <cmd>` | Escape hatch for custom build pipelines. |
-| `--json` | Print machine-readable output. |
-
-Write a scenario and capture it in one command:
-
-```bash
-component-shot \
-  --source "export default { render: () => <button>Save</button> }" \
-  --name save-button \
-  --save
-```
-
-## Gallery
-
-Open the live gallery:
-
-```bash
-component-shot gallery
-```
-
-The gallery scans `component-shot/scenarios`, bundles scenarios on demand, and renders each one in a live iframe preview. It watches the active `component-shot` directory and reloads when scenarios, setup, or screenshot history changes.
-
-Gallery features:
-
-- Search by scenario name or path.
-- Switch between auto layout and fixed two-, three-, or four-column grids.
-- Pin scenarios to keep them at the top.
-- Delete one scenario source file.
-- Clear all discovered scenario source files.
-- Open a scenario detail page with the live render first and screenshot history below it.
-
-Use a custom scenario directory:
-
-```bash
-component-shot gallery \
-  --scenario-dir packages/client/component-shot/scenarios
-```
-
-Use `--screenshots-dir` when screenshot history is not beside the scenario directory. Use `--no-open` to print the local URL without opening a browser.
-
-## MCP Server
-
-Run `component-shot-mcp` from an MCP client to capture scenarios directly from an agent.
-
-Example config:
-
-```json
-{
-  "mcpServers": {
-    "component-shot": {
-      "command": "component-shot-mcp",
-      "env": {
-        "COMPONENT_SHOT_PROJECT_ROOT": "/path/to/app",
-        "COMPONENT_SHOT_SCENARIO_DIR": "component-shot/scenarios"
-      }
-    }
-  }
-}
-```
-
-Tools:
-
-- `capture_component_shot`: capture an existing scenario file.
-- `capture_component_source`: write scenario source, capture it, and return the image.
-
-For worktrees that share dependencies from another checkout, set `COMPONENT_SHOT_DEPENDENCY_ROOT` to that installed checkout.
-
-## Codex Skill
-
-Install a repo-local Component Shot skill:
-
-```bash
-component-shot skill
-```
-
-This writes:
-
-```text
-.codex/skills/component-shot/SKILL.md
-```
-
-Use `--output-dir` or `--path` to choose a different skill parent directory, and `--overwrite` to replace an existing generated skill.
-
-## Programmatic API
-
-Apps can create thin wrappers when they need project-specific defaults:
-
-```ts
-#!/usr/bin/env node
-import { runComponentShotCli } from '@lioneltay/component-shot'
-
-await runComponentShotCli({
-  argv: process.argv.slice(2),
-  setup: 'component-shot/setup.tsx',
 })
 ```
 
-The package also exports the scenario/setup types and `createRspackBuild` for custom wrappers.
+Capture it or open the workbench:
+
+```bash
+pnpm exec component-shot capture --scenario component-shot/scenarios/billing/payment-failed.tsx --json
+pnpm exec component-shot gallery
+```
+
+## Agent Workflow
+
+Install the project MCP config and packaged skill:
+
+```bash
+pnpm exec component-shot mcp install --client codex
+pnpm exec component-shot skill
+```
+
+The intended loop is:
+
+1. Inspect the workspace and existing scenarios with normal filesystem tools.
+2. Edit the real React component and a deterministic scenario, or prepare complete TSX source for an ephemeral prototype.
+3. Call `capture_component_shot` and receive the rendered PNG in the same call.
+4. Inspect the image and structured diagnostics.
+5. Iterate without traversing the real application.
+6. Persist source, save gallery history, or export a durable image only when useful.
+
+The packaged skill includes provider patterns, state-authoring guidance, capture modes, visual review, responsive checks, and PR/documentation artifact guidance.
+
+## MCP Tools
+
+`component-shot-mcp` exposes one tool:
+
+| Tool | Purpose | Persists |
+| --- | --- | --- |
+| `capture_component_shot` | Render an existing scenario or complete TSX source, optionally crop the result, and return diagnostics plus the PNG in the same call. | Nothing by default; source, history, or a PNG only when requested. |
+
+Use an existing scenario:
+
+```json
+{
+  "target": {
+    "type": "scenario",
+    "path": "component-shot/scenarios/billing/payment-failed.tsx"
+  },
+  "viewport": { "width": 1024, "height": 768 }
+}
+```
+
+Or render complete source immediately without keeping it:
+
+```json
+{
+  "target": {
+    "type": "source",
+    "code": "export default { render: () => <button>Continue</button> }"
+  },
+  "area": { "type": "element", "selector": "button" }
+}
+```
+
+Add `target.persistAs` to retain source as a reusable gallery scenario. Add `saveScreenshot: { "type": "history" }` for gallery history, or `{ "type": "file", "path": "docs/images/example.png" }` for a stable artifact. History requires a persistent scenario; explicit file export also works with temporary source. Every successful call returns the image regardless of persistence.
+
+Capture area defaults to the visible viewport. Use `{ "type": "page" }` for the full scrollable document or `{ "type": "element", "selector": "[data-shot=dialog]" }` to render a complex composition while returning only its first matching visible element. Stable `data-shot` selectors are preferable to styling selectors.
+
+The MCP process keeps one renderer session alive. Scenario writes are constrained to the configured scenario root, output files are constrained to the project root, and `persistAs` never overwrites an existing scenario. Workspace discovery and source editing use the agent's normal filesystem tools.
+
+The installer writes `.codex/config.toml`. For another MCP client, run the binary with:
+
+```text
+COMPONENT_SHOT_PROJECT_ROOT=/path/to/app
+COMPONENT_SHOT_SCENARIO_DIR=component-shot/scenarios
+COMPONENT_SHOT_SCREENSHOTS_DIR=component-shot/screenshots
+COMPONENT_SHOT_BROWSER_CHANNEL=chrome
+```
+
+Only `COMPONENT_SHOT_PROJECT_ROOT` is normally needed. All paths are resolved once when the server starts.
+
+## Gallery
+
+```bash
+component-shot gallery [options]
+```
+
+The gallery is an operational master-detail workbench rather than a static screenshot grid:
+
+- **Overview** is the collection view and the first item in the scenario browser. It lazily renders every React scenario as a live thumbnail. A saved PNG is only a loading or error fallback, and the filters and counts describe saved screenshots.
+- Selecting a scenario opens its detail workspace. **Live** and **History** are local detail tabs rather than global application modes.
+- **Live** renders the selected React scenario itself in one responsive canvas with exact viewport, zoom, and background controls. Drag the right, bottom, or corner handle to resize; typed dimensions commit on Enter or blur.
+- **History** uses the full detail stage for saved PNG captures of the selected scenario.
+- **Inspector** shows state identity, metadata, effective viewport, tags, history count, and render diagnostics.
+- Every scenario row has an actions menu for destructive operations such as deletion.
+- The scenario browser and inspector collapse into narrow rails when more canvas space is useful.
+- **Capture** creates explicit local history; **Export** writes a stable project PNG.
+- Source and imported component changes invalidate the build cache and refresh the workbench.
+
+Live uses the viewer's browser so it remains immediate and inspectable. Capture and MCP screenshots use the declared deterministic profile; use a capture when locale, timezone, media emulation, or network policy is part of the review.
+
+Common options:
+
+```bash
+component-shot gallery --scenario-dir packages/web/component-shot/scenarios
+component-shot gallery --screenshots-dir .artifacts/component-shot
+component-shot gallery --read-only --no-open --port 4400
+```
+
+Deletion is available only in editable mode on a loopback host.
+
+## CLI
+
+```text
+component-shot capture --scenario <file.tsx> [options]
+component-shot capture --source <complete-tsx-module> --name <name> [options]
+component-shot gallery [options]
+component-shot list [options]
+component-shot init [options]
+component-shot doctor [options]
+component-shot browser install [chromium]
+component-shot mcp install [--client codex]
+component-shot skill [options]
+```
+
+Capture flags include `--save`, `--output`, `--viewport 390x844`, `--selector`, `--full-page`, `--wait-for`, `--setup`, `--scenario-dir`, `--screenshots-dir`, `--allow-network`, `--animations allow`, `--timeout`, `--json`, and `--debug`.
+
+Machine-readable failures use an error envelope with the failing stage: `discover`, `build`, `serve`, `render`, `capture`, or `artifact`.
+
+## Scenario API
+
+A scenario may export a React node, a render function, or an object. Object scenarios support:
+
+- `render`
+- `title`, `description`, and `tags`
+- `providerOptions`
+- `viewport` and `environment`
+- `rootStyle` and `wrapper`
+- `capture.selector`, `capture.fullPage`, and `capture.animations`
+- `setup`, `afterRender`, and `beforeScreenshot`
+
+Use lifecycle hooks for explicit readiness conditions, not arbitrary sleeps. Component Shot already waits for React mount, multiple animation frames, document fonts, and the capture target.
+
+Important states should be separate files such as:
+
+```text
+component-shot/scenarios/invoice/default.tsx
+component-shot/scenarios/invoice/loading.tsx
+component-shot/scenarios/invoice/empty.tsx
+component-shot/scenarios/invoice/payment-failed.tsx
+```
+
+## Artifacts
+
+Ephemeral capture is the default. CLI `--save` or MCP `saveScreenshot: { type: "history" }` publishes:
+
+```text
+component-shot/screenshots/<scenario-id>/latest.png
+component-shot/screenshots/<scenario-id>/history/<timestamp>-<id>.png
+```
+
+Use CLI `--output docs/images/example.png` or MCP `saveScreenshot: { type: "file", path: "docs/images/example.png" }` for a stable PR/documentation image. Existing screenshot history is user output and is never cleared implicitly.
+
+## Programmatic API
+
+One-shot capture:
+
+```ts
+import { captureComponentShot } from '@lioneltay/component-shot'
+
+const result = await captureComponentShot({
+  scenario: 'component-shot/scenarios/invoice/empty.tsx',
+  viewport: { width: 390, height: 844 },
+})
+```
+
+Persistent iteration session:
+
+```ts
+import { createComponentShotSession } from '@lioneltay/component-shot'
+
+const session = await createComponentShotSession({ cwd: process.cwd() })
+try {
+  await session.capture({ scenario: 'component-shot/scenarios/card/default.tsx' })
+  await session.capture({ scenario: 'component-shot/scenarios/card/error.tsx' })
+} finally {
+  await session.close()
+}
+```
+
+An ephemeral `outputPath` returned by a persistent session remains valid until that session closes. Pass `output`, use `save`, or export when the file must outlive the session. One-shot API and CLI results use a caller-owned temporary PNG.
+
+Public subpaths are available for browser-safe scenario helpers (`/react`), the gallery (`/gallery`), MCP embedding (`/mcp`), and custom Rspack configuration (`/rspack`).
+
+For a worktree that resolves dependencies from another checkout, set `COMPONENT_SHOT_DEPENDENCY_ROOTS` to a platform-delimited list of installed roots.
+
+## Scope And Safety
+
+Component Shot is React-specific on purpose. It complements unit, integration, and end-to-end tests; it does not replace application behavior testing. Scenario modules and custom build commands are trusted project code, not a sandbox for untrusted input.
+
+External requests are blocked by default, browser state is deterministic, preview operations do not silently save history, and writes are explicit and path-bounded.
 
 ## Development
 
 ```bash
 pnpm install
-pnpm browsers
-pnpm build
-pnpm check
-pnpm --dir demo build
-```
-
-Run the demo gallery:
-
-```bash
+pnpm verify
 pnpm --dir demo gallery
 ```
 
-Run the full verification command:
+`pnpm verify` typechecks, builds, runs behavior tests, and builds the demo app. Use `pnpm release:dry-run` to verify package contents before publishing.
 
-```bash
-pnpm verify
-```
-
-## Publishing
-
-The intended release path is the npm package with Node.js binaries:
-
-```bash
-pnpm release:dry-run
-pnpm release:publish
-```
-
-Before publishing:
-
-- Confirm `CHANGELOG.md` is current.
-- Confirm the version in `package.json`.
-- Inspect the `npm pack --dry-run` output.
-- Confirm the package name and `publishConfig.access` are correct for a public scoped package.
-
-### Bun Binary
-
-A Bun-compiled single executable is not the primary release target yet. Component Shot bundles user scenario files at runtime and depends on Playwright browser installation, so the npm binary is the lower-risk first public release. Revisit a Bun binary once the npm package API and gallery workflow stabilize.
+The gallery dogfoods its production React workbench through `component-shot/scenarios/gallery-workbench.tsx` and the adjacent Live and History scenarios. Capture those states when changing the workbench so inactive panels, asynchronous readiness, wide layouts, and narrow controls are reviewed through Component Shot itself.
 
 ## License
 

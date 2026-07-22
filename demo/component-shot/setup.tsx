@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
-import type { ComponentShotAppSetup } from '@lioneltay/component-shot'
+import { createComponentShot } from '@lioneltay/component-shot/react'
 import '../src/styles.css'
 
 export type DemoShotProviderOptions = {
@@ -25,11 +25,12 @@ const Provider = ({
   </div>
 )
 
-const setup: ComponentShotAppSetup<DemoShotProviderOptions> = {
+export const componentShot = createComponentShot<DemoShotProviderOptions>()
+export const scenario = componentShot.scenario
+
+export default componentShot.setup({
   Provider,
   rootStyle: {
     display: 'inline-block',
   },
-}
-
-export default setup
+})
