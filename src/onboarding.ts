@@ -222,7 +222,6 @@ export const installComponentShotMcpConfig = async ({
 	const block = `${section}
 command = ${JSON.stringify(invocation.command)}
 args = ${JSON.stringify(invocation.args)}
-cwd = ${JSON.stringify(paths.cwd)}
 startup_timeout_sec = 30
 tool_timeout_sec = 120
 `

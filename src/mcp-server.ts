@@ -336,32 +336,41 @@ export const createComponentShotMcpServer = async (options: ComponentShotMcpServ
 			try {
 				if (target.type === 'scenario') {
 					const resolved = await projects.resolveScenario(target)
-					project = resolved.project
-					await project.flushSourceChanges()
+					const runtime = resolved.project
+					project = runtime
+					const result = await runtime.runCapture([resolved.scenario], () =>
+						runtime.session.capture({ ...request, scenario: resolved.scenario }),
+					)
 					return captureResult(
-						await project.session.capture({ ...request, scenario: resolved.scenario }),
+						result,
 						true,
 						project,
 					)
 				}
 				if ('persistAs' in target) {
 					const resolved = await projects.resolvePersistedSource(target)
-					project = resolved.project
-					await project.flushSourceChanges()
-					return captureResult(
-						await project.session.captureSource({
+					const runtime = resolved.project
+					project = runtime
+					const result = await runtime.runCapture([resolved.scenario], () =>
+						runtime.session.captureSource({
 							...request,
 							scenario: resolved.scenario,
 							source: target.code,
 						}),
+					)
+					return captureResult(
+						result,
 						true,
 						project,
 					)
 				}
-				project = await projects.resolveTemporarySource(target.project)
-				await project.flushSourceChanges()
+				const runtime = await projects.resolveTemporarySource(target.project)
+				project = runtime
+				const result = await runtime.runCapture([], () =>
+					runtime.session.previewSource({ ...request, source: target.code }),
+				)
 				return captureResult(
-					await project.session.previewSource({ ...request, source: target.code }),
+					result,
 					false,
 					project,
 				)

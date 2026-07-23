@@ -22,22 +22,76 @@ See [Purpose and use cases](docs/use-cases.md) for the product goals and boundar
 - React and React DOM `>=18` in the target project
 - The packaged Playwright Chromium or a supported local Chrome/Edge installation
 
-## Install
+## Install Current Main
+
+> **Release status:** npm `latest` is currently `0.1.0`, which predates the `init`,
+> `doctor`, browser installer, current gallery, and one-tool MCP documented here.
+> Use the [v0.1.0 README](https://github.com/lioneltay/component-shot/blob/v0.1.0/README.md)
+> with that release. Until the next npm release, install the current implementation
+> directly from `main`.
+
+Run this from the React project that will own the scenarios:
 
 ```bash
-pnpm add -D @lioneltay/component-shot
-pnpm exec component-shot browser install chromium
-pnpm exec component-shot init
-pnpm exec component-shot doctor
+npm install --save-dev github:lioneltay/component-shot#main
+npx --no-install component-shot init
+npx --no-install component-shot doctor
 ```
 
-`browser install` invokes the Playwright CLI shipped with Component Shot. Captures automatically use an installed Chrome or Edge when the packaged Chromium is absent.
+The Git dependency runs the package build during installation. Commands in this README use
+`npx --no-install` so a missing local installation fails instead of silently downloading
+the older registry release. After the current implementation is published, the install
+command becomes:
+
+```bash
+npm install --save-dev @lioneltay/component-shot
+# or: pnpm add -D @lioneltay/component-shot
+```
+
+`doctor` checks React, React DOM, scenario discovery, provider setup, and browser
+availability. If its browser check fails, install the package-owned Chromium and rerun it:
+
+```bash
+npx --no-install component-shot browser install chromium
+npx --no-install component-shot doctor
+```
+
+Chrome or Edge is used automatically when available, so downloading Chromium is not
+normally necessary.
 
 `init` creates:
 
 ```text
 component-shot/setup.tsx
 component-shot/scenarios/example.tsx
+```
+
+Open the generated scenario immediately:
+
+```bash
+npx --no-install component-shot gallery
+```
+
+### Monorepos
+
+For a standalone app, install and initialize Component Shot in that app. In a monorepo,
+install it at the repository root when one CLI and MCP server should work across every
+React app, but initialize each app explicitly:
+
+```bash
+npx --no-install component-shot init --cwd packages/client
+npx --no-install component-shot doctor --cwd packages/client
+```
+
+Each app keeps its own setup and scenarios under paths such as
+`packages/client/component-shot`; do not run `init` at the repository root unless the
+repository root is itself the React project.
+
+`gallery`, `list`, and `doctor` select a single nested Component Shot project
+automatically. When the repository contains several, choose one explicitly:
+
+```bash
+npx --no-install component-shot gallery --cwd packages/client
 ```
 
 ## First Scenario
@@ -96,8 +150,8 @@ export default scenario({
 Capture it or open the workbench:
 
 ```bash
-pnpm exec component-shot capture --scenario component-shot/scenarios/billing/payment-failed.tsx --json
-pnpm exec component-shot gallery
+npx --no-install component-shot capture --scenario component-shot/scenarios/billing/payment-failed.tsx --json
+npx --no-install component-shot gallery
 ```
 
 ## Agent Workflow
@@ -105,9 +159,15 @@ pnpm exec component-shot gallery
 Install the project MCP config and packaged skill:
 
 ```bash
-pnpm exec component-shot mcp install --client codex
-pnpm exec component-shot skill
+npx --no-install component-shot mcp install --client codex
+npx --no-install component-shot skill
 ```
+
+Run both commands from the repository root. The MCP installer adds
+`.codex/config.toml`; the skill installer writes `.codex/skills/component-shot`.
+The generated MCP entry is repository-portable and does not contain an absolute working
+directory. Review and commit both outputs, then start a new Codex session from the
+repository root so it loads the server and skill with the correct working directory.
 
 The intended loop is:
 
@@ -163,10 +223,20 @@ The MCP process derives projects per request and keeps one renderer session aliv
 
 Structured results include the resolved `projectRoot` and setup mode (`project`, `configured`, `default`, or `custom-build`) so an agent can verify the rendering context it actually used.
 
-The installer writes a generic repository-local server entry to `.codex/config.toml`. For another MCP client, run the binary from the repository or monorepo root:
+The installer writes a generic repository-local server entry to `.codex/config.toml`.
+For another MCP client, configure a stdio server whose working directory is the repository
+or monorepo root:
 
-```text
-component-shot-mcp
+```json
+{
+  "mcpServers": {
+    "component-shot": {
+      "command": "npx",
+      "args": ["--no-install", "component-shot-mcp"],
+      "cwd": "/absolute/path/to/repository"
+    }
+  }
+}
 ```
 
 No workspace environment variables are required. `COMPONENT_SHOT_BROWSER_CHANNEL` remains available as an optional browser override. Relative `project`, scenario, and `persistAs` paths are resolved from the MCP process working directory, so one server can render every conventionally structured app in a monorepo.
@@ -174,10 +244,10 @@ No workspace environment variables are required. `COMPONENT_SHOT_BROWSER_CHANNEL
 ## Gallery
 
 ```bash
-component-shot gallery [options]
+npx --no-install component-shot gallery [options]
 ```
 
-Run the command from a React project or a monorepo root. Component Shot prefers a scenario directory in the current project, auto-selects a single nested project such as `packages/client`, and reports the available project paths when more than one is found. Use `--cwd packages/client` to choose explicitly in a multi-app repository.
+Run the command from a React project or a monorepo root. Component Shot prefers a scenario directory in the current project, auto-selects a single nested project such as `packages/client`, and reports the available project paths when more than one is found. Use `--cwd packages/client` to choose explicitly in a multi-app repository. See [Monorepos](#monorepos) for installation and initialization.
 
 The gallery is an operational master-detail workbench rather than a static screenshot grid:
 
@@ -196,31 +266,43 @@ Live uses the viewer's browser so it remains immediate and inspectable. Capture 
 Common options:
 
 ```bash
-component-shot gallery --cwd packages/client
-component-shot gallery --scenario-dir packages/web/component-shot/scenarios
-component-shot gallery --screenshots-dir .artifacts/component-shot
-component-shot gallery --read-only --no-open --port 4400
+npx --no-install component-shot gallery --cwd packages/client
+npx --no-install component-shot gallery --scenario-dir packages/web/component-shot/scenarios
+npx --no-install component-shot gallery --screenshots-dir .artifacts/component-shot
+npx --no-install component-shot gallery --read-only --no-open --port 4400
 ```
 
 Deletion is available only in editable mode on a loopback host.
 
 ## CLI
 
-```text
-component-shot capture --scenario <file.tsx> [options]
-component-shot capture --source <complete-tsx-module> --name <name> [options]
-component-shot gallery [options]
-component-shot list [options]
-component-shot init [options]
-component-shot doctor [options]
-component-shot browser install [chromium]
-component-shot mcp install [--client codex]
-component-shot skill [options]
+```bash
+npx --no-install component-shot capture --scenario <file.tsx> [options]
+npx --no-install component-shot capture --source <complete-tsx-module> --name <name> [options]
+npx --no-install component-shot gallery [options]
+npx --no-install component-shot list [options]
+npx --no-install component-shot init [options]
+npx --no-install component-shot doctor [options]
+npx --no-install component-shot browser install [chromium]
+npx --no-install component-shot mcp install [--client codex]
+npx --no-install component-shot skill [options]
 ```
 
 Capture flags include `--save`, `--output`, `--viewport 390x844`, `--selector`, `--full-page`, `--wait-for`, `--setup`, `--scenario-dir`, `--screenshots-dir`, `--allow-network`, `--animations allow`, `--timeout`, `--json`, and `--debug`.
 
 Machine-readable failures use an error envelope with the failing stage: `discover`, `build`, `serve`, `render`, `capture`, or `artifact`.
+
+## Installation Troubleshooting
+
+- **`Unknown option "init"`**: the installed package does not match this README. Follow
+  the release-status notice in [Install Current Main](#install-current-main).
+- **`component-shot: command not found`**: invoke the project dependency with
+  `npx --no-install component-shot` rather than relying on a global binary.
+- **Browser check failed**: run
+  `npx --no-install component-shot browser install chromium`.
+- **Scenarios need app context**: add routers, themes, stores, and data clients to
+  `component-shot/setup.tsx`.
+- **Several monorepo projects were found**: select one with `--cwd <project>`.
 
 ## Scenario API
 

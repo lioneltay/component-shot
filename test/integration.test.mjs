@@ -412,7 +412,10 @@ test('MCP exposes one capture tool for source, scenarios, focused regions, and a
       'utf8',
     )
   await writeWatchedScenario('#dc2626')
-	const service = await createComponentShotMcpServer({ cwd: repoRoot })
+	const service = await createComponentShotMcpServer({
+		cwd: repoRoot,
+		watchSourceChanges: false,
+	})
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
   const client = new Client({ name: 'component-shot-test', version: '1.0.0' })
   await service.server.connect(serverTransport)
@@ -654,14 +657,21 @@ test('MCP exposes one capture tool for source, scenarios, focused regions, and a
       name: 'capture_component_shot',
     })
     await writeWatchedScenario('#2563eb')
-    await new Promise((resolve) => setTimeout(resolve, 250))
-    const secondCapture = await client.callTool({
-      arguments: { target: { path: watchedScenarioRelative, type: 'scenario' } },
-      name: 'capture_component_shot',
-    })
+    const [secondCapture, concurrentCapture] = await Promise.all([
+      client.callTool({
+        arguments: { target: { path: watchedScenarioRelative, type: 'scenario' } },
+        name: 'capture_component_shot',
+      }),
+      client.callTool({
+        arguments: { target: { path: watchedScenarioRelative, type: 'scenario' } },
+        name: 'capture_component_shot',
+      }),
+    ])
     const firstImage = firstCapture.content.find((item) => item.type === 'image')
     const secondImage = secondCapture.content.find((item) => item.type === 'image')
+    const concurrentImage = concurrentCapture.content.find((item) => item.type === 'image')
     assert.notEqual(firstImage.data, secondImage.data)
+    assert.equal(secondImage.data, concurrentImage.data)
   } finally {
     await client.close()
     await service.close()

@@ -1,5 +1,4 @@
 import { spawn } from 'node:child_process'
-import { watch, type FSWatcher } from 'node:fs'
 import fs from 'node:fs/promises'
 import http from 'node:http'
 import path from 'node:path'
@@ -21,6 +20,7 @@ import {
 	createComponentShotWorkspace,
 	type ComponentShotWorkspace,
 } from './workspace.js'
+import { startWorkspaceWatcher } from './workspace-watcher.js'
 
 export type ComponentShotGalleryOptions = {
 	browserChannel?: string
@@ -82,17 +82,6 @@ const defaultGalleryOptions = {
 } as const
 
 const galleryClientUrl = new URL('./gallery-client.js', import.meta.url)
-
-const ignoredWatchDirectories = new Set([
-	'.architecture',
-	'.audit',
-	'.git',
-	'.next',
-	'.turbo',
-	'coverage',
-	'dist',
-	'node_modules',
-])
 
 const isLoopbackHost = (host: string) =>
 	host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === '[::1]'
@@ -280,33 +269,6 @@ const closeHttpServer = async (server: http.Server) => {
 	})
 }
 
-const collectWatchDirectories = async (root: string, screenshotsDir: string) => {
-	const directories: string[] = []
-	const visit = async (directory: string) => {
-		directories.push(directory)
-		let entries: import('node:fs').Dirent[]
-		try {
-			entries = await fs.readdir(directory, { withFileTypes: true })
-		} catch {
-			return
-		}
-		await Promise.all(
-			entries.map(async (entry) => {
-				if (!entry.isDirectory() || ignoredWatchDirectories.has(entry.name)) {
-					return
-				}
-				const child = path.join(directory, entry.name)
-				if (isPathWithin({ candidate: child, root: screenshotsDir })) {
-					return
-				}
-				await visit(child)
-			}),
-		)
-	}
-	await visit(root)
-	return directories
-}
-
 const startWorkspaceWatchers = async ({
 	onHistory,
 	onSource,
@@ -316,51 +278,23 @@ const startWorkspaceWatchers = async ({
 	onSource: (changedPath: string) => void
 	workspace: ComponentShotWorkspace
 }) => {
-	const watchers: FSWatcher[] = []
-	const handleChange = (watchRoot: string, filename: string | Buffer | null) => {
-		const changedPath = filename ? path.resolve(watchRoot, filename.toString()) : watchRoot
-		if (isPathWithin({ candidate: changedPath, root: workspace.screenshotsDir })) {
-			onHistory()
-			return
-		}
-		const relative = path.relative(workspace.cwd, changedPath)
-		if (relative.split(path.sep).some((segment) => ignoredWatchDirectories.has(segment))) {
-			return
-		}
-		onSource(changedPath)
-	}
-
-	try {
-		watchers.push(
-			watch(workspace.cwd, { recursive: true }, (_event, filename) =>
-				handleChange(workspace.cwd, filename),
-			),
-		)
-	} catch {
-		const directories = await collectWatchDirectories(workspace.cwd, workspace.screenshotsDir)
-		for (const directory of directories) {
-			try {
-				watchers.push(
-					watch(directory, (_event, filename) => handleChange(directory, filename)),
-				)
-			} catch {
-				// A directory may disappear between discovery and watcher creation.
-			}
-		}
-	}
-
+	const stopSourceWatcher = await startWorkspaceWatcher({
+		ignoredRoots: [workspace.screenshotsDir],
+		onChange: onSource,
+		root: workspace.cwd,
+	})
+	let stopHistoryWatcher = () => {}
 	if (await pathExists(workspace.screenshotsDir)) {
-		try {
-			watchers.push(watch(workspace.screenshotsDir, { recursive: true }, onHistory))
-		} catch {
-			watchers.push(watch(workspace.screenshotsDir, onHistory))
-		}
+		stopHistoryWatcher = await startWorkspaceWatcher({
+			ignoredDirectoryNames: new Set(),
+			onChange: onHistory,
+			root: workspace.screenshotsDir,
+		})
 	}
 
 	return () => {
-		for (const watcher of watchers) {
-			watcher.close()
-		}
+		stopSourceWatcher()
+		stopHistoryWatcher()
 	}
 }
 

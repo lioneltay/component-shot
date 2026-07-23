@@ -1,4 +1,4 @@
-import { watch, type FSWatcher } from 'node:fs'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { ComponentShotBuild, ComponentShotRenderProtocol } from './build-types.js'
@@ -16,6 +16,7 @@ import {
 	type ComponentShotSessionOptions,
 } from './session.js'
 import { createComponentShotWorkspace } from './workspace.js'
+import { startWorkspaceWatcher } from './workspace-watcher.js'
 
 export type ComponentShotMcpProjectOptions = {
 	browserChannel?: string
@@ -24,6 +25,7 @@ export type ComponentShotMcpProjectOptions = {
 	defaults?: ComponentShotSessionOptions['defaults']
 	protocol?: Partial<ComponentShotRenderProtocol>
 	rspack?: ComponentShotRspackOptions | false
+	watchSourceChanges?: boolean
 }
 
 export type ComponentShotMcpSetup =
@@ -33,10 +35,17 @@ export type ComponentShotMcpSetup =
 	| { mode: 'project'; path: string }
 
 export type ComponentShotMcpProjectRuntime = {
-	flushSourceChanges: () => Promise<void>
 	getSetup: () => Promise<ComponentShotMcpSetup>
 	projectRoot: string
+	runCapture: <Result>(
+		observedPaths: string[],
+		operation: () => Promise<Result>,
+	) => Promise<Result>
 	session: ComponentShotSession
+}
+
+type ComponentShotMcpInternalProjectRuntime = ComponentShotMcpProjectRuntime & {
+	close: () => Promise<void>
 }
 
 type ProjectReference = {
@@ -98,17 +107,17 @@ const inferComponentShotProject = (anchorPath: string) => {
 	return firstSegment === 'scenarios' ? path.dirname(componentShotDir) : undefined
 }
 
-const createProjectWatcher = ({
-	onSourceChange,
-	projectRoot,
-}: {
-	onSourceChange: (event: string, filename: string | Buffer | null) => void
-	projectRoot: string
-}) => {
+const readSourceDigest = async (sourcePath: string) => {
 	try {
-		return watch(projectRoot, { recursive: true }, onSourceChange)
-	} catch {
-		return watch(projectRoot, onSourceChange)
+		return createHash('sha256').update(await fs.readFile(sourcePath)).digest('hex')
+	} catch (error) {
+		const code = typeof error === 'object' && error && 'code' in error ? error.code : undefined
+		if (code === 'ENOENT' || code === 'ENOTDIR') return undefined
+		throw new ComponentShotError(
+			'discover',
+			`Unable to inspect source changes for ${sourcePath}: ${error instanceof Error ? error.message : String(error)}`,
+			{ cause: error },
+		)
 	}
 }
 
@@ -116,7 +125,7 @@ export const createComponentShotMcpProjectRegistry = async (
 	options: ComponentShotMcpProjectOptions = {},
 ): Promise<ComponentShotMcpProjectRegistry> => {
 	const baseDir = await statDirectory(path.resolve(process.cwd(), options.cwd ?? '.'))
-	const projects = new Map<string, Promise<ComponentShotMcpProjectRuntime & { watcher: FSWatcher }>>()
+	const projects = new Map<string, Promise<ComponentShotMcpInternalProjectRuntime>>()
 	let closed = false
 
 	const resolveProjectDirectory = (projectInput: string) =>
@@ -134,27 +143,21 @@ export const createComponentShotMcpProjectRegistry = async (
 		})
 		const session = await workspace.createSession()
 		const changedPaths = new Set<string>()
-		const onSourceChange = (_event: string, filename: string | Buffer | null) => {
-			if (!filename) return
-			const changedPath = path.resolve(projectRoot, filename.toString())
-			const relativePath = path.relative(projectRoot, changedPath)
-			if (
-				isPathWithin({ candidate: changedPath, root: workspace.screenshotsDir }) ||
-				relativePath
-					.split(path.sep)
-					.some((segment) => ['.git', 'dist', 'node_modules'].includes(segment))
-			) {
-				return
-			}
-			changedPaths.add(changedPath)
-		}
-		let watcher: FSWatcher
+		const sourceDigests = new Map<string, string | undefined>()
+		let stopWatching = () => {}
 		try {
-			watcher = createProjectWatcher({ onSourceChange, projectRoot })
+			if (options.watchSourceChanges !== false) {
+				stopWatching = await startWorkspaceWatcher({
+					ignoredRoots: [workspace.screenshotsDir],
+					onChange: (changedPath) => changedPaths.add(changedPath),
+					root: projectRoot,
+				})
+			}
 		} catch (error) {
 			await session.close()
 			throw error
 		}
+		let operationQueue = Promise.resolve()
 		const getSetup = async (): Promise<ComponentShotMcpSetup> => {
 			const projectSetup = await findSetupPath(path.join(projectRoot, 'component-shot'))
 			if (projectSetup) return { mode: 'project', path: projectSetup }
@@ -164,18 +167,56 @@ export const createComponentShotMcpProjectRegistry = async (
 			if (options.build || options.rspack === false) return { mode: 'custom-build' }
 			return { mode: 'default' }
 		}
-		return {
-			flushSourceChanges: async () => {
+		const observePaths = async (observedPaths: string[]) => {
+			for (const observedPath of observedPaths) {
+				const absolutePath = path.resolve(projectRoot, observedPath)
+				if (!isPathWithin({ candidate: absolutePath, root: projectRoot })) continue
+				const digest = await readSourceDigest(absolutePath)
+				if (!sourceDigests.has(absolutePath) || sourceDigests.get(absolutePath) !== digest) {
+					changedPaths.add(absolutePath)
+				}
+				sourceDigests.set(absolutePath, digest)
+			}
+		}
+		const flushSourceChanges = async () => {
+			if (changedPaths.size === 0) return
+			const paths = [...changedPaths]
+			changedPaths.clear()
+			await session.invalidate(paths)
+		}
+		const runCapture = <Result>(
+			observedPaths: string[],
+			operation: () => Promise<Result>,
+		): Promise<Result> => {
+			const execute = async () => {
 				await new Promise((resolve) => setTimeout(resolve, 30))
-				if (changedPaths.size === 0) return
-				const paths = [...changedPaths]
-				changedPaths.clear()
-				await session.invalidate(paths)
+				await observePaths(observedPaths)
+				await flushSourceChanges()
+				try {
+					return await operation()
+				} finally {
+					await observePaths(observedPaths)
+					await flushSourceChanges()
+				}
+			}
+			const result = operationQueue.then(execute)
+			operationQueue = result.then(
+				() => undefined,
+				() => undefined,
+			)
+			return result
+		}
+		return {
+			close: async () => {
+				stopWatching()
+				await operationQueue
+				sourceDigests.clear()
+				await session.close()
 			},
 			getSetup,
 			projectRoot,
+			runCapture,
 			session,
-			watcher,
 		}
 	}
 
@@ -303,10 +344,10 @@ export const createComponentShotMcpProjectRegistry = async (
 			await Promise.allSettled(
 				settledProjects.flatMap((result) => {
 					if (result.status === 'rejected') return []
-					result.value.watcher.close()
-					return [result.value.session.close()]
+					return [result.value.close()]
 				}),
 			)
+			projects.clear()
 		},
 		resolvePersistedSource,
 		resolveScenario,

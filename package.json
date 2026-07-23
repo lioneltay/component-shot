@@ -1,6 +1,6 @@
 {
   "name": "@lioneltay/component-shot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Capture, inspect, and iterate React component scenarios with Playwright.",
   "license": "MIT",
   "author": "Lionel Tay",
@@ -69,7 +69,7 @@
     "browsers": "playwright install chromium",
     "build": "tsc -p tsconfig.json && node dist/build-gallery-client.js",
     "check": "tsc -p tsconfig.json --noEmit",
-    "prepare": "pnpm build",
+    "prepare": "npm run build",
     "prepublishOnly": "pnpm verify",
     "release:dry-run": "pnpm verify && npm pack --dry-run --ignore-scripts",
     "release:publish": "npm publish --access public",

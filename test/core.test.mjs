@@ -50,12 +50,12 @@ test('skill installer copies the complete package and customizes its identity', 
 
 test('MCP installer writes a generic server without workspace environment variables', async () => {
 	const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'component-shot-mcp-config-test-'))
-	try {
-		const result = await installComponentShotMcpConfig({ cwd })
-		assert.equal(result.changed, true)
-		const config = await fs.readFile(result.configPath, 'utf8')
-		assert.match(config, /\[mcp_servers\.component-shot\]/)
-		assert.match(config, /cwd = /)
+		try {
+			const result = await installComponentShotMcpConfig({ cwd })
+			assert.equal(result.changed, true)
+			const config = await fs.readFile(result.configPath, 'utf8')
+			assert.match(config, /\[mcp_servers\.component-shot\]/)
+			assert.doesNotMatch(config, /cwd = /)
 		assert.doesNotMatch(config, /COMPONENT_SHOT_PROJECT_ROOT/)
 		assert.doesNotMatch(config, /COMPONENT_SHOT_SCENARIO_DIR/)
 		assert.doesNotMatch(config, /\[mcp_servers\.component-shot\.env\]/)
