@@ -22,31 +22,19 @@ See [Purpose and use cases](docs/use-cases.md) for the product goals and boundar
 - React and React DOM `>=18` in the target project
 - The packaged Playwright Chromium or a supported local Chrome/Edge installation
 
-## Install Current Main
-
-> **Release status:** npm `latest` is currently `0.1.0`, which predates the `init`,
-> `doctor`, browser installer, current gallery, and one-tool MCP documented here.
-> Use the [v0.1.0 README](https://github.com/lioneltay/component-shot/blob/v0.1.0/README.md)
-> with that release. Until the next npm release, install the current implementation
-> directly from `main`.
+## Install
 
 Run this from the React project that will own the scenarios:
 
 ```bash
-npm install --save-dev github:lioneltay/component-shot#main
+npm install --save-dev @lioneltay/component-shot
+# or: pnpm add -D @lioneltay/component-shot
 npx --no-install component-shot init
 npx --no-install component-shot doctor
 ```
 
-The Git dependency runs the package build during installation. Commands in this README use
-`npx --no-install` so a missing local installation fails instead of silently downloading
-the older registry release. After the current implementation is published, the install
-command becomes:
-
-```bash
-npm install --save-dev @lioneltay/component-shot
-# or: pnpm add -D @lioneltay/component-shot
-```
+Commands in this README use `npx --no-install` so a missing local installation fails
+instead of silently downloading another package version.
 
 `doctor` checks React, React DOM, scenario discovery, provider setup, and browser
 availability. If its browser check fails, install the package-owned Chromium and rerun it:
@@ -294,8 +282,8 @@ Machine-readable failures use an error envelope with the failing stage: `discove
 
 ## Installation Troubleshooting
 
-- **`Unknown option "init"`**: the installed package does not match this README. Follow
-  the release-status notice in [Install Current Main](#install-current-main).
+- **`Unknown option "init"`**: the installed package does not match this README. Upgrade
+  `@lioneltay/component-shot` and rerun the command with `npx --no-install`.
 - **`component-shot: command not found`**: invoke the project dependency with
   `npx --no-install component-shot` rather than relying on a global binary.
 - **Browser check failed**: run
