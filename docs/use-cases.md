@@ -15,6 +15,7 @@ The scenario is the durable unit of work: a small React module that mounts eithe
 - Let a person inspect every scenario, capture, and error through an intuitive gallery workbench.
 - Make feedback loops explicit: scenario, pixels, feedback, source change, refreshed pixels.
 - Produce deterministic PNGs for pull requests, documentation, design review, and release notes.
+- Package every scenario into one self-contained offline gallery for review outside the development workspace.
 - Reuse the real application component and provider stack whenever that gives the most faithful result.
 
 ## Primary Use Cases
@@ -42,6 +43,19 @@ The gallery presents a searchable scenario list, live canvas, live all-scenario 
 ### Create Pull Request And Documentation Screenshots
 
 An accepted scenario can be exported to a stable output path with known viewport and state metadata. Iteration history stays local; explicit exports can be committed.
+
+### Share An Offline Gallery
+
+`component-shot gallery export` freshly captures every scenario with `save: false` and
+packages the rendered pixels and safe display metadata into one HTML file. A reviewer can
+double-click it and browse offline without receiving application or scenario source.
+Failed scenarios remain represented with safe failure information, and the CLI reports a
+partial failure rather than presenting an incomplete collection as fully successful.
+Saved screenshot history is an explicit opt-in because embedding it makes the file
+larger; neither mode mutates history. Unreadable requested history is represented by
+warnings in the available export and an unsuccessful CLI status. A configurable
+128 MiB raw-history ceiling prevents optional saved comparisons from exhausting export
+memory.
 
 ### Capture Arbitrary React UI
 
@@ -72,6 +86,7 @@ A failing UI state becomes a scenario that can be captured repeatedly, shared in
 7. Use a scenario row's actions menu for deletion.
 8. Capture or export the current state when useful.
 9. Give feedback using the scenario name and visible state.
+10. Export the whole gallery when someone needs a portable, offline review artifact.
 
 ## Product Principles
 
@@ -81,6 +96,7 @@ A failing UI state becomes a scenario that can be captured repeatedly, shared in
 - **Projects are request-scoped**: scenario and `persistAs` paths self-locate; only temporary source must name its React project.
 - **One state, one identity**: scenario IDs, history, exports, gallery routes, and MCP results use the same key.
 - **Preview is read-like**: looking at pixels does not silently create persistent artifacts.
+- **Portable review is pixel-first**: offline galleries contain rendered pixels and safe metadata, not application source.
 - **Writes are explicit**: `persistAs` retains source and `saveScreenshot` retains pixels; omission leaves both ephemeral.
 - **Errors are visible**: build, runtime, browser, and capture failures include stage and actionable diagnostics.
 - **Real code is preferred**: Component Shot complements application tests; it does not replace integration correctness.
@@ -102,4 +118,5 @@ A failing UI state becomes a scenario that can be captured repeatedly, shared in
 - Build and runtime failures are visible within one feedback cycle.
 - Previewing does not modify persistent history unless requested.
 - A person can find a scenario and distinguish its live render, viewport, saved screenshot history, and diagnostics without reading source.
+- A reviewer can open one exported HTML file offline and inspect every successful or failed scenario without installing Component Shot.
 - The installed package, MCP server, generated skill, and gallery exercise the same underlying contracts.

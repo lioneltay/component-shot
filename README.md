@@ -262,12 +262,45 @@ npx --no-install component-shot gallery --read-only --no-open --port 4400
 
 Deletion is available only in editable mode on a loopback host.
 
+### Export A Shareable Gallery
+
+```bash
+npx --no-install component-shot gallery export
+npx --no-install component-shot gallery export --include-history --overwrite --json
+```
+
+`gallery export` freshly captures every discovered scenario and writes one
+self-contained `component-shot-gallery.html` by default. The file embeds the rendered
+pixels, viewer assets, and safe scenario and capture metadata rather than application or
+scenario source. Send that one file to a reviewer and they can double-click it to browse
+the gallery offline without installing Component Shot or starting a server.
+Scenario details use a near-full-viewport desktop viewer. Captures open at fit width
+inside a keyboard- and touch-scrollable canvas; use **View at 100%** when the original
+pixel scale is more useful.
+
+The fresh capture pass uses `save: false`, so exporting neither creates nor changes
+`latest.png` or screenshot history entries. Existing history is excluded by default;
+`--include-history` reads and embeds it without mutation, which can make the HTML
+substantially larger. Optional history is capped at 128 MiB of raw PNG data by default
+to keep export memory bounded; adjust it with `--max-history-bytes`.
+
+Scenarios that fail to build, render, or capture remain visible in the exported gallery
+with safe failure information. The CLI still writes the reviewable gallery and reports
+the result as a partial failure instead of silently omitting those scenarios. It refuses
+to replace an existing output file unless `--overwrite` is supplied. If requested
+history cannot be read, the available gallery is still written with visible warnings
+and the CLI exits unsuccessfully so the omission cannot be missed.
+
+This command is separate from the selected scenario's **Export** action in the live
+gallery, which writes one stable PNG.
+
 ## CLI
 
 ```bash
 npx --no-install component-shot capture --scenario <file.tsx> [options]
 npx --no-install component-shot capture --source <complete-tsx-module> --name <name> [options]
 npx --no-install component-shot gallery [options]
+npx --no-install component-shot gallery export [options]
 npx --no-install component-shot list [options]
 npx --no-install component-shot init [options]
 npx --no-install component-shot doctor [options]
@@ -277,6 +310,15 @@ npx --no-install component-shot skill [options]
 ```
 
 Capture flags include `--save`, `--output`, `--viewport 390x844`, `--selector`, `--full-page`, `--wait-for`, `--setup`, `--scenario-dir`, `--screenshots-dir`, `--allow-network`, `--animations allow`, `--timeout`, `--json`, and `--debug`.
+
+The complete offline-gallery form is:
+
+```text
+component-shot gallery export [--output component-shot-gallery.html]
+  [--include-history] [--max-history-bytes <n>] [--overwrite]
+  [--cwd <path>] [--scenario-dir <path>]
+  [--screenshots-dir <path>] [--setup <path>] [--browser-channel <id>] [--json]
+```
 
 Machine-readable failures use an error envelope with the failing stage: `discover`, `build`, `serve`, `render`, `capture`, or `artifact`.
 
@@ -326,7 +368,27 @@ component-shot/screenshots/<scenario-id>/history/<timestamp>-<id>.png
 
 Use CLI `--output docs/images/example.png` or MCP `saveScreenshot: { type: "file", path: "docs/images/example.png" }` for a stable PR/documentation image. Existing screenshot history is user output and is never cleared implicitly.
 
+Use `component-shot gallery export` for a portable collection artifact. It freshly
+captures every scenario with `save: false` and embeds the pixels, safe metadata, and
+visible per-scenario failures in one offline HTML file. The export contains no
+application source. Add `--include-history` only when saved comparisons are worth the
+larger file.
+
 ## Programmatic API
+
+Offline gallery export:
+
+```ts
+import { exportComponentShotGallery } from '@lioneltay/component-shot'
+
+const result = await exportComponentShotGallery({
+  output: 'component-shot-gallery.html',
+  includeHistory: false,
+})
+```
+
+`result` reports the output path, byte size, capture and failure counts, included history,
+safe per-scenario failure summaries, and any history-embedding warnings.
 
 One-shot capture:
 

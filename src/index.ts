@@ -20,7 +20,9 @@ export { runComponentShotCli } from './cli-runner.js'
 export type { ComponentShotCliConfig } from './cli-runner.js'
 export {
 	createComponentShotGalleryIndex,
+	exportComponentShotGallery,
 	runComponentShotGalleryCli,
+	runComponentShotGalleryExportCli,
 	startComponentShotGallery,
 } from './gallery.js'
 export { createComponentShotMcpServer } from './mcp-server.js'
@@ -33,6 +35,10 @@ export {
 } from './onboarding.js'
 export type { ComponentShotDoctorCheck, ComponentShotDoctorResult } from './onboarding.js'
 export type {
+	ComponentShotGalleryExportFailure,
+	ComponentShotGalleryExportOptions,
+	ComponentShotGalleryExportResult,
+	ComponentShotGalleryExportWarning,
 	ComponentShotGalleryIndex,
 	ComponentShotGalleryOptions,
 	ComponentShotGalleryScenario,

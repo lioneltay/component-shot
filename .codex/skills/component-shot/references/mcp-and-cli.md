@@ -65,12 +65,43 @@ component-shot capture --scenario component-shot/scenarios/card/loading.tsx --js
 component-shot capture --scenario component-shot/scenarios/card/loading.tsx --save --json
 component-shot capture --scenario component-shot/scenarios/card/loading.tsx --output docs/images/card-loading.png
 component-shot gallery
+component-shot gallery export
 component-shot list --json
 ```
 
 `gallery`, `list`, and `doctor` prefer the current project's `component-shot/scenarios` directory and otherwise auto-select one nested Component Shot project. In a monorepo with several configured apps, pass `--cwd apps/web` (or an explicit `--scenario-dir`) to select one; the CLI lists the candidates instead of opening an empty gallery.
 
 Useful flags include `--viewport 390x844`, `--full-page`, `--selector`, `--wait-for`, `--setup`, `--scenario-dir`, `--screenshots-dir`, `--allow-network`, and `--animations allow`.
+
+## Offline gallery export
+
+```text
+component-shot gallery export [--output component-shot-gallery.html]
+  [--include-history] [--max-history-bytes <n>] [--overwrite]
+  [--cwd <path>] [--scenario-dir <path>]
+  [--screenshots-dir <path>] [--setup <path>] [--browser-channel <id>] [--json]
+```
+
+The command freshly captures every discovered scenario with `save: false`. It does not
+create or update `latest.png` or screenshot history. It writes one self-contained HTML
+document containing the rendered pixels, viewer assets, and safe scenario and capture
+metadata rather than application or scenario source. A reviewer can double-click the
+file and browse it offline without a Component Shot server or installation.
+
+If a scenario fails to build, render, or capture, the exported document keeps it visible
+with safe failure information. The CLI writes the reviewable collection and reports a
+partial failure rather than silently dropping the scenario. Existing saved history is
+excluded by default; `--include-history` reads and embeds it without mutation and can
+substantially increase the output size. If requested history cannot be read, the
+available export includes warning details and the command exits unsuccessfully. Raw
+history PNGs are capped at 128 MiB by default; use `--max-history-bytes` to adjust the
+ceiling.
+
+The default output is `component-shot-gallery.html`. Component Shot refuses to replace an
+existing output unless `--overwrite` is present. Project selection and rendering use the
+same `--cwd`, `--scenario-dir`, `--screenshots-dir`, `--setup`, and `--browser-channel`
+options as the corresponding gallery and capture flows. Add `--json` for machine-readable
+CLI output.
 
 ## Failures
 

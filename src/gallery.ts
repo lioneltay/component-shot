@@ -5,6 +5,10 @@ import path from 'node:path'
 import { findLatestArtifact, listHistory } from './artifacts.js'
 import type { ComponentShotBuild, ComponentShotRenderProtocol } from './build-types.js'
 import { resolveComponentShotCliWorkspace } from './cli-workspace.js'
+import {
+	runComponentShotGalleryExportCli,
+	type ComponentShotGalleryExportOptions,
+} from './gallery-export.js'
 import { createGalleryHtml } from './gallery-ui.js'
 import type { ComponentShotGalleryScenarioView } from './gallery-types.js'
 import type { ComponentShotRspackOptions } from './rspack.js'
@@ -632,6 +636,7 @@ export const startComponentShotGallery = async (
 
 const createGalleryUsage = (usageCommand: string) => `Usage:
   ${usageCommand}
+  component-shot gallery export [options]
 
 Options:
   --scenario-dir <path>     Scenario directory. Defaults to component-shot/scenarios.
@@ -761,6 +766,23 @@ export const runComponentShotGalleryCli = async ({
 	options?: ComponentShotGalleryOptions
 	usageCommand?: string
 } = {}) => {
+	if (argv[0] === 'export') {
+		const exportOptions: ComponentShotGalleryExportOptions = {
+			browserChannel: baseOptions.browserChannel,
+			build: baseOptions.build,
+			cwd: baseOptions.cwd,
+			defaults: baseOptions.defaults,
+			protocol: baseOptions.protocol,
+			rspack: baseOptions.rspack,
+			scenarioDir: baseOptions.scenarioDir,
+			screenshotsDir: baseOptions.screenshotsDir,
+			setup: baseOptions.setup,
+		}
+		return runComponentShotGalleryExportCli({
+			argv: argv.slice(1),
+			options: exportOptions,
+		})
+	}
 	const parsed = parseGalleryCliArgs({ argv, usageCommand })
 	if (parsed.help) {
 		process.stdout.write(`${createGalleryUsage(usageCommand)}\n`)
@@ -794,3 +816,14 @@ export const runComponentShotGalleryCli = async ({
 	await waitForShutdownSignal()
 	await gallery.close()
 }
+
+export {
+	exportComponentShotGallery,
+	runComponentShotGalleryExportCli,
+} from './gallery-export.js'
+export type {
+	ComponentShotGalleryExportFailure,
+	ComponentShotGalleryExportOptions,
+	ComponentShotGalleryExportResult,
+	ComponentShotGalleryExportWarning,
+} from './gallery-export.js'

@@ -2,6 +2,10 @@
 
 All notable changes to Component Shot will be documented here.
 
+## Unreleased
+
+- Export every scenario as a fresh, self-contained offline HTML gallery with a near-full-viewport, scrollable fit-width/actual-size image viewer, scrubbed diagnostics, visible partial failures and history warnings, bounded optional screenshot history, and no application source or history mutation.
+
 ## 0.2.0 - 2026-07-23
 
 - Run a typed React master-detail gallery with sidebar Overview navigation, per-scenario action menus, local Live/History tabs, draggable viewport resizing, collapsible side panels, export, and diagnostics.

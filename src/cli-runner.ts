@@ -58,6 +58,7 @@ const defaultCaptureUsage = 'component-shot capture --scenario <file.tsx> [optio
 const createUsage = (captureUsage = defaultCaptureUsage) => `Usage:
   ${captureUsage}
 ${captureUsage === defaultCaptureUsage ? '  component-shot --scenario <file.tsx> [options]\n' : ''}  component-shot gallery [options]
+  component-shot gallery export [options]
   component-shot list [options]
   component-shot init [options]
   component-shot doctor [options]
